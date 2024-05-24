@@ -67,6 +67,10 @@
   },
   {
    "optionDest": "hiddenimports",
+   "value": "PIL.Image"
+  },
+  {
+   "optionDest": "hiddenimports",
    "value": "requests"
   },
   {
