@@ -1,0 +1,19 @@
+{
+    "metadata": {
+        "title": "Example Manhwa",
+        "author": "Author Name",
+        "publicationDate": "2023-10-05",
+        "genre": "Fantasy"
+    },
+    "chapters": [
+        {
+            "chapterNumber": 1,
+            "title": "The Beginning",
+            "pages": [
+                {"type": "base64", "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAABYlBMVEUAAIAAAKkAAKsAAKoAAKsAAKodHbSmpuHU1PEzM7u1tebm5vdCQsAICKxsbM7a2vPGxuwPD68CAqpfX8nMzO47O70BAapcXMnPz+9SUsU2Nrz19fv////b2/P9/f7q6vjj4/aRkdqhod/f3/THx+z5+f0yMrqLi9ikpOCDg9b6+v19fdO3t+cREbDz8/uCgtWuruSNjdlERMBzc9CqquItLbkHB6zw8Prl5fbY2PLZ2fIqKriTk9s/P7+IiNcfH7SFhdbLy+0lJbZ0dNB3d9KQkNr7+/739/xZWccDA6vR0fDx8fpkZMssLLhISMKYmNwgILTa2vJ/f9RBQcDQ0O8LC64hIbVGRsHm5vY4OLze3vQoKLe/v+mXl9zc3POJidcUFLA8PL74+P3p6fdoaMwEBKt7e9PNze5BQb8cHLPp6fjy8vugoN8+Pr5UVMZWVsYFBaspKbgODq41NbseHrQJCa3K28caAAAABnRSTlMCfOb/fOfvJMB8AAABEElEQVR4AbzKU4IDUQAF0U5uzDFrbPXYtm3vfxWx8fov9VvHslxu1c3tSn0Z81heM/BacqhhwOcP+IKhcCQaizc1q6W1rb2js6u7CHp6oa8fBgaBIQ3DyCiMjReAJmByahpmZmFEczb98wuwWARLsKwVWF1bZ0PaZEvbsFMEu2mwlwLqyoP9anCQBod5cOQEjuHEAMKnZ+cXMgCA0KUJXF3DTTW4zYM+3cG9AWzpwQnsm8FjNXhKg+cUsNf0gv36Vgbe4eMzBb6+D+FHvxD/I/BeBP9sPCWXkJiUnJKaJpOewZyZJZOdk4uUYPJi8guAVGERkCgWAhIl4aUoKUpsYFM14azHQijzMjCy4tHPwgAAoVBHJ6Y0EhcAAAAASUVORK5CYII="},
+                {"type": "url", "data": "https://assets.file.org/images/fileorg-logo-440x90-4-8b.png"},
+                {"type": "base64", "data": "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAMAAABEpIrGAAABYlBMVEUAAIAAAKkAAKsAAKoAAKsAAKodHbSmpuHU1PEzM7u1tebm5vdCQsAICKxsbM7a2vPGxuwPD68CAqpfX8nMzO47O70BAapcXMnPz+9SUsU2Nrz19fv////b2/P9/f7q6vjj4/aRkdqhod/f3/THx+z5+f0yMrqLi9ikpOCDg9b6+v19fdO3t+cREbDz8/uCgtWuruSNjdlERMBzc9CqquItLbkHB6zw8Prl5fbY2PLZ2fIqKriTk9s/P7+IiNcfH7SFhdbLy+0lJbZ0dNB3d9KQkNr7+/739/xZWccDA6vR0fDx8fpkZMssLLhISMKYmNwgILTa2vJ/f9RBQcDQ0O8LC64hIbVGRsHm5vY4OLze3vQoKLe/v+mXl9zc3POJidcUFLA8PL74+P3p6fdoaMwEBKt7e9PNze5BQb8cHLPp6fjy8vugoN8+Pr5UVMZWVsYFBaspKbgODq41NbseHrQJCa3K28caAAAABnRSTlMCfOb/fOfvJMB8AAABEElEQVR4AbzKU4IDUQAF0U5uzDFrbPXYtm3vfxWx8fov9VvHslxu1c3tSn0Z81heM/BacqhhwOcP+IKhcCQaizc1q6W1rb2js6u7CHp6oa8fBgaBIQ3DyCiMjReAJmByahpmZmFEczb98wuwWARLsKwVWF1bZ0PaZEvbsFMEu2mwlwLqyoP9anCQBod5cOQEjuHEAMKnZ+cXMgCA0KUJXF3DTTW4zYM+3cG9AWzpwQnsm8FjNXhKg+cUsNf0gv36Vgbe4eMzBb6+D+FHvxD/I/BeBP9sPCWXkJiUnJKaJpOewZyZJZOdk4uUYPJi8guAVGERkCgWAhIl4aUoKUpsYFM14azHQijzMjCy4tHPwgAAoVBHJ6Y0EhcAAAAASUVORK5CYII="}
+            ]
+        }
+    ]
+}

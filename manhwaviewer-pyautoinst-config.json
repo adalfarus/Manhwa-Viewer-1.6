@@ -63,27 +63,11 @@
   },
   {
    "optionDest": "datas",
-   "value": "./extensionss;extensions/"
-  },
-  {
-   "optionDest": "hiddenimports",
-   "value": "aplustools.web.webtools"
+   "value": "./extensions;extensions/"
   },
   {
    "optionDest": "datas",
-   "value": "./moduless;modules/"
-  },
-  {
-   "optionDest": "hiddenimports",
-   "value": "aplustools.utils.imagetools"
-  },
-  {
-   "optionDest": "hiddenimports",
-   "value": "aplustools.io.loggers"
-  },
-  {
-   "optionDest": "hiddenimports",
-   "value": "aplustools.data.database"
+   "value": "./modules;modules/"
   }
  ],
  "nonPyinstallerOptions": {

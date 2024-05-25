@@ -1,36 +1,37 @@
-from aplustools.web.webtools import Search
 from aplustools.utils.imagetools import OnlineImage, OfflineImage
-save_image = OnlineImage.save_image
-convert_image_format = OnlineImage.convert_image_format
-download_image = OnlineImage.download_image
-download_logo_image = OnlineImage.download_logo_image
-from aplustools.web.webtools import check_url, is_crawlable
-import os
-#import requests
-from bs4 import BeautifulSoup
-import urllib3
-from abc import ABC, abstractmethod
-from PIL import Image
-from typing import Optional#, Union
-from urllib.parse import urljoin#, urlparse
-#from urllib.parse import urlencode, urlunparse, quote_plus
-#from urllib.request import urlopen, Request
-import threading
-from queue import Queue
-import time
-from requests.sessions import Session
-from multiprocessing import Pool
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import re
+from aplustools.web.webtools import check_url, is_crawlable
+from urllib.parse import urlencode, urlunparse, quote_plus
+from urllib.request import urlopen, Request
+from aplustools.web.webtools import Search
+from urllib.parse import urljoin, urlparse
+from requests.sessions import Session
+from abc import ABC, abstractmethod
+from typing import Optional, Union
+from multiprocessing import Pool
+from bs4 import BeautifulSoup
+from queue import Queue
+from PIL import Image
 import unicodedata
+import threading
+import requests
+import urllib3
+import time
+import re
+import os
+
+convert_image_format = OnlineImage.convert_image_format
 
 # Disable only the specific InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 
 class AutoProviderPlugin(ABC):
     def __init__(self, title: str, chapter: int, chapter_rate: float, data_folder: str, cache_folder: str, provider: str, specific_provider_website: str, logo_path: str):
         self.title = title
         self.url_title = self.urlify(title)
+        self.chapter = None
+        self.chapter_str = None
         self.chap(chapter)
         self.chapter_rate = chapter_rate
         self.data_folder = data_folder
@@ -152,14 +153,12 @@ class AutoProviderPlugin(ABC):
         print("Handle cache result done, returning now ...")
         return final_result
             
-    def _download_logo_image(self, img_url: str, new_name: str, img_format: str, img_type: Optional[str]=None):
-        image = OnlineImage(img_url)
-        if img_type is None:
-            download_logo_image(img_url, new_name, img_format)
-        elif img_type.lower() == "url":
-            image.download_image(self.data_folder, img_url, new_name, img_format)
-        elif img_type.lower() == "base64":
-            image.base64(self.data_folder, new_name, img_format, img_url) # Moved data to the back to avoid using keyword arguments
+    def _download_logo_image(self, url_or_data: str, new_name: str, img_format: str, img_type: Optional[str] = None):
+        image = OnlineImage(url_or_data)
+        if img_type.lower() == "url":
+            image.download_image(self.data_folder, url_or_data, new_name, img_format)
+        elif img_type.lower() == "base64":  # Moved data to the back to avoid using keyword arguments
+            image.base64(self.data_folder, new_name, img_format, url_or_data)
         
     def redo_prep(self):
         self._empty_cache()
@@ -196,9 +195,9 @@ class AutoProviderPlugin(ABC):
         
     def _google_provider(self):
         queries = [
-            f'manga "{self.title}" "chapter {self.chapter}" site:{self.specific_provider_website}',
-            f'manga "{self.title}" chapter {self.chapter} site:{self.specific_provider_website}',
-            f'manga {self.title} chapter {self.chapter} site:{self.specific_provider_website}',
+            f'manga "{self.title}" "chapter {self.chapter}" site:{self.specific_provider_website} -tapas',
+            f'manga "{self.title}" chapter {self.chapter} site:{self.specific_provider_website} -tapas',
+            f'manga {self.title} chapter {self.chapter} site:{self.specific_provider_website} -tapas',
             f'manga {self.title} site:{self.specific_provider_website}',
             f'manga site:{self.specific_provider_website}'
         ]
@@ -207,9 +206,9 @@ class AutoProviderPlugin(ABC):
         
     def _duckduckgo_provider(self):
         queries = [
-            f'manga "{self.title}" "chapter {self.chapter}" site:{self.specific_provider_website}',
-            f'manga "{self.title}" chapter {self.chapter} site:{self.specific_provider_website}',
-            f'manga {self.title} chapter {self.chapter} site:{self.specific_provider_website}',
+            f'manga "{self.title}" "chapter {self.chapter}" site:{self.specific_provider_website} -tapas',
+            f'manga "{self.title}" chapter {self.chapter} site:{self.specific_provider_website} -tapas',
+            f'manga {self.title} chapter {self.chapter} site:{self.specific_provider_website} -tapas',
             f'manga {self.title} site:{self.specific_provider_website}',
             f'manga site:{self.specific_provider_website}'
         ]
@@ -218,14 +217,14 @@ class AutoProviderPlugin(ABC):
         
     def _bing_provider(self):
         queries = [
-            f'manga "{self.title}" "chapter {self.chapter}" site:{self.specific_provider_website}',
-            f'manga "{self.title}" chapter {self.chapter} site:{self.specific_provider_website}',
-            f'manga {self.title} chapter {self.chapter} site:{self.specific_provider_website}',
+            f'manga "{self.title}" "chapter {self.chapter}" site:{self.specific_provider_website} -tapas',
+            f'manga "{self.title}" chapter {self.chapter} site:{self.specific_provider_website} -tapas',
+            f'manga {self.title} chapter {self.chapter} site:{self.specific_provider_website} -tapas',
             f'manga {self.title} site:{self.specific_provider_website}',
             f'manga site:{self.specific_provider_website}'
         ]
         search = Search()
-        return Search.bing_provider(queries)
+        return search.bing_provider(queries)
                 
     @abstractmethod
     def _indirect_provider(self): # Can't be generalized, you need to overwrite this
@@ -235,6 +234,9 @@ class AutoProviderPlugin(ABC):
     def _direct_provider(self): # Can't be generalized, you need to overwrite this
         return None
             
+    def get_search_results(self, text): # Can't be generalized, you need to overwrite this
+        return False # Could also return None, but stick to bool for this method
+
     def _empty_cache(self):
         files = os.listdir(self.cache_folder)
         for f in files:
@@ -382,3 +384,143 @@ class AutoProviderPlugin(ABC):
         print("Cache current chapter done, returning now")
         print("Download Thread alive: " + str(download_thread.is_alive()), "Provess Thread alive: " + str(process_thread.is_alive()))
         return download_result and process_result
+
+
+class AutoProviderBaseLike(AutoProviderPlugin):
+    def __init__(self, title, chapter, chapter_rate, data_folder, cache_folder, provider, specific_provider_website,
+                 logo_path, logo_url_or_data, logo_img_format, logo_img_type):
+        super().__init__(title=title, chapter=chapter, chapter_rate=chapter_rate, data_folder=data_folder,
+                         cache_folder=cache_folder, provider=provider,
+                         specific_provider_website=specific_provider_website, logo_path=logo_path)
+        if not os.path.isfile(os.path.join(data_folder, logo_path.split("/")[-1])):
+            try:
+                # Using base64 is better as it won't matter if the url is ever changed, otherwise pass the url and
+                # img_type="url"
+                self._download_logo_image(logo_url_or_data, logo_path.split("/")[-1].split(".")[0],
+                                          img_format=logo_img_format, img_type=logo_img_type)
+            except Exception as e:
+                print(f"An error occurred {e}")
+                return
+
+    def _search(self, text: Optional[str] = None):
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0',
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': f'https://{self.specific_provider_website}',
+            'Referer': f'https://{self.specific_provider_website}',
+        }
+
+        # Define the URL for the request
+        url = f'https://{self.specific_provider_website}/wp-admin/admin-ajax.php'
+
+        # Define the data for the first POST request
+        data = {
+            'action': 'wp-manga-search-manga',
+            'title': text or self.title
+        }
+
+        # Send the first POST request
+        response = requests.post(url, headers=headers, data=data)
+
+        # Check for a successful response (HTTP status code 200)
+        if response.status_code == 200:
+            # Parse the JSON response
+            response_data = response.json()
+            return response_data
+        else:
+            print(f'Error: {response.status_code}')
+        return None
+
+    def _direct_provider(self):
+        response_data = self._search()
+        url = self._get_url(response_data["data"][0]["url"] + f"chapter-{self.chapter_str}/",
+                            f'chapter {self.chapter} {self.title.title()}')
+        if url:
+            print("Found URL:" + url)  # Concatenate (add-->+) string, to avoid breaking timestamps
+            return url
+        return None
+
+    def _indirect_provider(self):
+        url = self._get_url(
+            f'https://{self.specific_provider_website}/manga/{"-".join(self.url_title.lower().split())}/chapter-'
+            f'{self.chapter_str}/', f'chapter{self.chapter} {self.title.title()}')
+        if url:
+            print("Found URL:" + url)  # Concatenate (add-->+) string, to avoid breaking timestamps
+            return url
+        return None
+
+    def get_search_results(self, text):
+        if text is None:
+            return True
+        response_data = self._search(text)
+        titles = [data.get("title") for data in response_data["data"]]
+        # urls = [self._get_url(data["url"] + f"chapter-{self.chapter_str}/",
+        #                       f'chapter {self.chapter} {self.title.title()}') for data in response_data["data"]]
+        return ([title, "data\\reload_icon.png"] for title in titles)  # list(zip(titles, url_results))
+
+
+class AutoProviderBaseLike2(AutoProviderBaseLike):
+    def _search(self, text: Optional[str] = None):
+        headers = {
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Connection': 'keep-alive',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'DNT': '1',
+            'Host': 'manganato.com',
+            'Origin': f'https://{self.specific_provider_website}',
+            'Referer': f'https://{self.specific_provider_website}',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-origin',
+            'Sec-GPC': '1',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0',
+            'X-KL-Ajax-Request': 'Ajax_Request',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+
+        # Define the URL for the request
+        url = f'https://{self.specific_provider_website}/getstorysearchjson'
+
+        # Define the data for the first POST request
+        data = {
+            "searchword": text or self.title
+        }
+
+        # Send the first POST request
+        response = requests.post(url, headers=headers, data=data)
+
+        # Check for a successful response (HTTP status code 200)
+        if response.status_code == 200:
+            # Parse the JSON response
+            response_data = response.json()
+            return response_data
+        else:
+            print(f'Error: {response.status_code}')
+        return None
+
+    def _direct_provider(self):
+        response_data = self._search()
+        if response_data and "data" in response_data and len(response_data["data"]) > 0:
+            first_result_url = response_data["data"][0].get("url_story", "") + f"chapter-{self.chapter_str}/"
+            url = self._get_url(first_result_url, f'chapter {self.chapter} {self.title.title()}')
+            if url:
+                print(f"Found URL: {url}")  # Using f-string for better readability
+                return url
+        return None
+
+    def _indirect_provider(self):
+        return None
+
+    def get_search_results(self, text):
+        if text is None:
+            return True
+        response_data = self._search(text)
+        if response_data and "data" in response_data:
+            titles = [data.get("name") for data in response_data["data"]]
+            # Assuming you want to return a generator of tuples (title, image path)
+            return ((title, "") for title in titles)
+        return iter([])  # Return an empty iterator if no data
