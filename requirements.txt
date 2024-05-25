@@ -1,6 +1,7 @@
 aplustools==0.1.3.6
 beautifulsoup4==4.12.2
 duckduckgo_search==3.9.6
+Pillow==10.3.0
 PySide6==6.7.0
 Requests==2.31.0
 urllib3==2.1.0

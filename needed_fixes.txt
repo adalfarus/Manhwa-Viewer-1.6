@@ -7,7 +7,13 @@
 - better handeling of chapter loading times # Fixed
 - title and chapter shown as name next to manhwaviewer # Fixed shown next to MV to make shorter and more readable
 - Make CustomProgressDialog look better and more customizable # Fixed
+- scrollbar doesnt work with touch screen
+- touch screen input way to sensitive
+- progress dialog doesn't show over the stay on top flagged qmainapplication
 
+- touch screen input with more than one finger needed (maybe gestures like zooming, but lower priority right now)
+- flickering of image edges, when scrolling or in right vertical position
+- better compilation results with pyinstaller and nuitka
 - add indirect and direct mode (indirect, what direct is at the moment, direct use the href from website
 to go to next chapter, etc. --> direct would require a start manga url [could potentially also extract it from chapter url])
 - better speed for loading chapters

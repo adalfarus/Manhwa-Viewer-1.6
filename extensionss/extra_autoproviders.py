@@ -15,7 +15,38 @@ class AutoProviderPluginManhwaClan(AutoProviderPlugin):
             except: return
 
     def _direct_provider(self):
-        pass
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0',
+            'Accept': 'application/json, text/javascript, */*; q=0.01',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            'X-Requested-With': 'XMLHttpRequest',
+            'Origin': 'https://manhwaclan.com',
+            'Referer': 'https://manhwaclan.com/',
+        }
+
+        # Define the URL for the request
+        url = 'https://manhwaclan.com/wp-admin/admin-ajax.php'
+
+        # Define the data for the first POST request
+        data = {
+            'action': 'wp-manga-search-manga',
+            'title': self.title
+        }
+
+        # Send the first POST request
+        response = requests.post(url, headers=headers, data=data)
+
+        # Check for a successful response (HTTP status code 200)
+        if response.status_code == 200:
+            # Parse the JSON response
+            response_data = response.json()
+            url = self._get_url(response_data["data"][0]["url"] + f"chapter-{self.chapter_str}/", f'chapter {self.chapter} {self.title.title()}')
+            if url:
+                print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
+                return url
+        else:
+            print(f'Error: {response.status_code}')
+        return None
     
     def _indirect_provider(self):
         url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.title.lower().split())}/chapter-{self.chapter_str}/', f'chapter {self.chapter} {self.title.title()}')
