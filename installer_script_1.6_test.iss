@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "ManhwaViewer"
-#define MyAppVersion "1.6.4"
+#define MyAppVersion "1.6.5"
 #define MyAppPublisher "Cariel Becker"
 #define MyAppURL "https://www.cariel-becker.com/"
 #define MyAppExeName "manhwaviewer.exe"
@@ -10,7 +10,7 @@
 #define MyAppAssocExt ".mwa1"
 #define MyAppAssocKey StringChange(MyAppAssocName, " ", "") + MyAppAssocExt
 #define MyAppDir ".\output\manhwaviewer\"
-#define MyAppId "577A1BA9-5E47-4574-AEE8-495133C450AD"
+#define MyAppId "E23667B7-D8F3-465C-B04E-BC39534DF28C"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -23,7 +23,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\{#MyAppName}
+DefaultDirName={autopf}\{#MyAppName}{#MyAppVersion}
 ChangesAssociations=yes
 DisableProgramGroupPage=yes
 ;InfoBeforeFile=Hello
@@ -32,7 +32,7 @@ DisableProgramGroupPage=yes
 ;PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=.\
-OutputBaseFilename=manhwaviewer-v1.6.4-win10-11-x64-installer
+OutputBaseFilename=manhwaviewer-v1.6.5-win10-11-x64-test-installer
 SetupIconFile=./data/Untitled-1.ico
 ;Password=88ef5ac2-477c-41c2-afb5-5689a3ae98a5
 ;Encryption=yes
