@@ -66,8 +66,24 @@
    "value": "./extensionss;extensions/"
   },
   {
+   "optionDest": "hiddenimports",
+   "value": "aplustools.web.webtools"
+  },
+  {
    "optionDest": "datas",
    "value": "./moduless;modules/"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "aplustools.utils.imagetools"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "aplustools.io.loggers"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "aplustools.data.database"
   }
  ],
  "nonPyinstallerOptions": {

@@ -2,14 +2,14 @@ import json
 import base64
 from io import BytesIO
 from PIL import Image
-from aplustools.imagetools import OfflineImage
+from aplustools.utils.imagetools import OfflineImage
 import requests
 import urllib3
 import os
 from urllib.parse import urlencode, urlunparse, quote_plus
 from urllib.request import urlopen, Request
 from urllib.parse import urljoin, urlparse
-from aplustools import webtools as wt
+from aplustools.web import webtools as wt
 
 # Disable only the specific InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)

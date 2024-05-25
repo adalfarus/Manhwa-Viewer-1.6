@@ -1,6 +1,6 @@
 from modules.AutoProviderPlugin import AutoProviderPlugin
 from duckduckgo_search import DDGS
-from aplustools.webtools import Search
+from aplustools.web.webtools import Search
 import os
 from urllib.parse import urlencode, urlunparse, quote_plus
 import requests

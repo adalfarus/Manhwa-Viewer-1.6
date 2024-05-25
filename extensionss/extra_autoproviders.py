@@ -4,7 +4,7 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import re
-from aplustools.webtools import Search
+from aplustools.web.webtools import Search
 
 
 class AutoProviderPluginManhwaClan(AutoProviderPlugin):
@@ -49,7 +49,7 @@ class AutoProviderPluginManhwaClan(AutoProviderPlugin):
         return None
     
     def _indirect_provider(self):
-        url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.title.lower().split())}/chapter-{self.chapter_str}/', f'chapter {self.chapter} {self.title.title()}')
+        url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.url_title.lower().split())}/chapter-{self.chapter_str}/', f'chapter {self.chapter} {self.title.title()}')
         if url:
             print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
             return url
@@ -139,7 +139,7 @@ class AutoProviderPluginMangaQueen(AutoProviderPlugin):
         pass
     
     def _indirect_provider(self):
-        url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.title.lower().split())}/chapter-{self.chapter}/', f'chapter {self.chapter} {self.title}')
+        url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.url_title.lower().split())}/chapter-{self.chapter}/', f'chapter {self.chapter} {self.title}')
         if url:
             print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
             return url
@@ -156,7 +156,7 @@ class AutoProviderPluginMangaGirl(AutoProviderPlugin):
         pass
     
     def _indirect_provider(self):
-        url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.title.lower().split())}/chapter-{self.chapter}/', f'chapter {self.chapter} {self.title}')
+        url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.url_title.lower().split())}/chapter-{self.chapter}/', f'chapter {self.chapter} {self.title}')
         if url:
             print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
             return url
@@ -196,7 +196,7 @@ class AutoProviderPluginMangaBuddy(AutoProviderPlugin):
         pass
     
     def _indirect_provider(self):
-        url = self._get_url(f'https://{self.specific_provider_website}/{"-".join(self.title.lower().split())}/chapter-{self.chapter}/', f'chapter {self.chapter} {self.title}')
+        url = self._get_url(f'https://{self.specific_provider_website}/{"-".join(self.url_title.lower().split())}/chapter-{self.chapter}/', f'chapter {self.chapter} {self.title}')
         if url:
             print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
             return url
@@ -213,7 +213,7 @@ class AutoProviderPluginS2Manga(AutoProviderPlugin):
         pass
     
     def _indirect_provider(self):
-        url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.title.lower().split())}/chapter-{self.chapter}/', f'chapter {self.chapter} {self.title}')
+        url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.url_title.lower().split())}/chapter-{self.chapter}/', f'chapter {self.chapter} {self.title}')
         if url:
             print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
             return url

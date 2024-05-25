@@ -1,26 +1,28 @@
-from aplustools.webtools import Search
-from aplustools.imagetools import OnlineImage, OfflineImage
+from aplustools.web.webtools import Search
+from aplustools.utils.imagetools import OnlineImage, OfflineImage
 save_image = OnlineImage.save_image
 convert_image_format = OnlineImage.convert_image_format
 download_image = OnlineImage.download_image
 download_logo_image = OnlineImage.download_logo_image
-from aplustools.webtools import check_url, is_crawlable
+from aplustools.web.webtools import check_url, is_crawlable
 import os
-import requests
+#import requests
 from bs4 import BeautifulSoup
 import urllib3
 from abc import ABC, abstractmethod
 from PIL import Image
-from typing import Optional, Union
-from urllib.parse import urljoin, urlparse
-from urllib.parse import urlencode, urlunparse, quote_plus
-from urllib.request import urlopen, Request
+from typing import Optional#, Union
+from urllib.parse import urljoin#, urlparse
+#from urllib.parse import urlencode, urlunparse, quote_plus
+#from urllib.request import urlopen, Request
 import threading
 from queue import Queue
 import time
 from requests.sessions import Session
 from multiprocessing import Pool
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import re
+import unicodedata
 
 # Disable only the specific InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -28,6 +30,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 class AutoProviderPlugin(ABC):
     def __init__(self, title: str, chapter: int, chapter_rate: float, data_folder: str, cache_folder: str, provider: str, specific_provider_website: str, logo_path: str):
         self.title = title
+        self.url_title = self.urlify(title)
         self.chap(chapter)
         self.chapter_rate = chapter_rate
         self.data_folder = data_folder
@@ -49,6 +52,13 @@ class AutoProviderPlugin(ABC):
         self.download_progress_queue = Queue()
         self.process_progress_queue = Queue()
         self.session = Session()  # Create a session for connection pooling
+
+    @staticmethod
+    def urlify(to_url: str):
+        url = unicodedata.normalize('NFKD', to_url)
+        url = url.encode('ascii', 'ignore').decode('ascii')
+        url = re.sub(r"[^a-zA-Z0-9\s_-]", "", url)  # title = re.sub(r"[^a-zA-Z0-9_-]", "", title)
+        return url.strip()
 
     def get_logo_path(self):
         return self.logo_path

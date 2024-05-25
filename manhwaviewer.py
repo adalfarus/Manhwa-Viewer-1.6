@@ -5,20 +5,21 @@ from PySide6.QtWidgets import (QApplication, QLabel, QSizePolicy, QVBoxLayout, Q
                              QRadioButton, QDialog, QGroupBox, QToolButton, 
                              QDialogButtonBox, QMessageBox, QFileDialog, 
                              QProgressDialog, QStyleFactory)
-from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QDoubleValidator, QFont, QPainter, QPen, QBrush
+from PySide6.QtGui import QDesktopServices, QPixmap, QPalette, QColor, QIcon, QDoubleValidator, QFont, QPainter, QPen, QBrush
 from PySide6.QtCore import QLine, Qt, QTimer, QPropertyAnimation, QRect, QThread, Signal, Slot, QUrl
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from modules.AutoProviderPlugin import AutoProviderPlugin
 from modules.ManhwaFilePlugin import ManhwaFilePlugin
-from aplustools import setdirtoex # Just import needed
-import aplustools.environment as env
+# from aplustools import set_dir_to_ex # Just import needed
+import aplustools.io.environment as env
 from typing import Optional, List
 import aplustools as apt
 import importlib.util
 import threading
 import platform
+import requests
 import base64
 import ctypes
 import winreg
@@ -28,7 +29,6 @@ import json
 import time
 import sys
 import os
-import re
         
 class DataFiles:
     def __init__(self, base_path):
@@ -192,7 +192,10 @@ class Settings():
             "export_settings": "",
             "auto_export": "False",
             "provider_type": "indirect",
-            "chapter_rate": "0.5"
+            "chapter_rate": "0.5",
+            "no_update_info": "True",
+            "update_info": "True",
+            "last_scroll_positions": "0, 0"
         }
         if overwrite_settings:
             self.settings.update(overwrite_settings)
@@ -216,11 +219,12 @@ class Settings():
             return int(value) if float(value).is_integer() else float(value)
         elif key in ["chapter_rate"]:
             return float(value)
-        elif key in ["downscaling", "upscaling", "borderless", "invisible_background", "hide_scrollbar", "stay_on_top", "auto_export"]:
+        elif key in ["downscaling", "upscaling", "borderless", "invisible_background", "hide_scrollbar", "stay_on_top", "auto_export", 
+                     "no_update_info", "update_info"]:
             return self.boolean(value)
         elif key in ["manual_content_width"]:
             return int(value)
-        elif key in ["geometry"]:
+        elif key in ["geometry", "last_scroll_positions"]:
             return [int(x) for x in value.split(", ")]
         return value
 
@@ -231,11 +235,12 @@ class Settings():
             value = str(int(value) if float(value).is_integer() else value)
         elif key in ["chapter_rate"]:
             value = str(float(value))
-        elif key in ["downscaling", "upscaling", "borderless", "invisible_background", "hide_scrollbar", "stay_on_top", "auto_export"]:
+        elif key in ["downscaling", "upscaling", "borderless", "invisible_background", "hide_scrollbar", "stay_on_top", "auto_export", 
+                     "no_update_info", "update_info"]:
             value = str(value)
         elif key in ["manual_content_width"]:
             value = str(int(value))
-        elif key in ["geometry"]:
+        elif key in ["geometry", "last_scroll_positions"]:
             value = ', '.join([str(x) for x in value])
         self.settings[key] = value
         self.update_data()
@@ -347,6 +352,24 @@ class Settings():
 
     def set_chapter_rate(self, value):
         self.set("chapter_rate", value)
+        
+    def get_no_update_info(self):
+        return self.get("no_update_info")
+
+    def set_no_update_info(self, value):
+        self.set("no_update_info", value)
+        
+    def get_update_info(self):
+        return self.get("update_info")
+
+    def set_update_info(self, value):
+        self.set("update_info", value)
+
+    def get_last_scroll_positions(self):
+        return self.get("last_scroll_positions")
+
+    def set_last_scroll_positions(self, value):
+        self.set("last_scroll_positions", value)
 
     def setup_database(self, settings):
         # Define tables and their columns
@@ -739,9 +762,99 @@ def get_windows_theme():
 class ImageLabel(QLabel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        
+class AdvancedQMessageBox(QMessageBox):
+    def __init__(self, parent=None, icon=None, windowTitle='', text='', detailedText='', 
+                 checkbox=None, standardButtons=QMessageBox.Ok, defaultButton=None):
+        """
+        An advanced QMessageBox with additional configuration options.
+        
+        :param parent: The parent widget.
+        :param icon: The icon to display.
+        :param windowTitle: The title of the message box window.
+        :param text: The text to display.
+        :param detailedText: The detailed text to display.
+        :param checkbox: A QCheckBox instance.
+        :param standardButtons: The standard buttons to include.
+        :param defaultButton: The default button.
+        """
+        super().__init__(parent)
+        if icon: self.setIcon(icon)
+        if windowTitle: self.setWindowTitle(windowTitle)
+        if text: self.setText(text)
+        if detailedText: self.setDetailedText(detailedText)
+        if checkbox: self.setCheckBox(checkbox)
+        self.setStandardButtons(standardButtons)
+        if defaultButton: self.setDefaultButton(defaultButton)
 
 class ManhwaViewer(QMainWindow):
     def __init__(self, parent=None):
+        def check_for_update():
+            response = requests.get("https://raw.githubusercontent.com/adalfarus/update_check/main/mv/update.json")
+            try:
+                update_json = response.json()
+            except requests.exceptions.RequestException as e:
+                print(f"An error occurred: {e}")
+                return
+            except requests.exceptions.JSONDecodeError as e:
+                print(f"An error occurred: {e}")
+                return
+            except ValueError as e:
+                print(f"An error occurred: {e}")
+                return
+            newestVersion = float(update_json["metadata"]["newestVersion"][:3])
+            newestVersionData = update_json["versions"][-1]
+            push = newestVersionData["push"] == "True"
+            count = 2
+            while (not push and newestVersion > 1.7) and count <= len(update_json["versions"]):
+                newestVersionData = update_json["versions"][-count]
+                count += 1
+                push = newestVersionData["push"] == "True"
+            if newestVersion > 1.7 and self.settings.get_update_info() and push:
+                title = "There is an update available"
+                text = f"There is a newer version ({newestVersion}) available.\nDo you want to open the link to the update?"
+                description = newestVersionData.get("Description", newestVersionData["description"])
+                checkbox = QCheckBox("Do not show again")
+                msg_box = AdvancedQMessageBox(self, QMessageBox.Question, title, text, description, checkbox,
+                                              QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+
+                retval = msg_box.exec()
+
+                if checkbox.isChecked():
+                    print("Do not show again selected")
+                    self.settings.set_update_info(False)
+                if retval == QMessageBox.Yes:
+                    link = "https://github.com/adalfarus/update_check/blob/main/sorry.md"
+                    QDesktopServices.openUrl(QUrl(link))
+            elif self.settings.get_no_update_info() and (push or newestVersion == 1.7):
+                title = "Info"
+                text = f"No new updates available.\nChecklist last updated {update_json['metadata']['lastUpdated'].replace('-', '.')}."
+                description = newestVersionData.get("Description", newestVersionData["description"])
+                checkbox = QCheckBox("Do not show again")
+                msg_box = AdvancedQMessageBox(self, QMessageBox.Information, title, text, description, checkbox,
+                                              QMessageBox.Ok, QMessageBox.Ok)
+
+                retval = msg_box.exec()
+
+                if checkbox.isChecked():
+                    print("Do not show again selected")
+                    self.settings.set_no_update_info(False)
+            elif self.settings.get_no_update_info() and not push:
+                title = "Info"
+                text = f"New version available, but not recommended {newestVersionData['versionNumber']}.\nChecklist last updated {update_json['metadata']['lastUpdated'].replace('-', '.')}."
+                description = newestVersionData.get("Description", newestVersionData["description"])
+                checkbox = QCheckBox("Do not show again")
+                msg_box = AdvancedQMessageBox(self, QMessageBox.Information, title, text, description, checkbox,
+                                              QMessageBox.Ok, QMessageBox.Ok)
+
+                retval = msg_box.exec()
+
+                if checkbox.isChecked():
+                    print("Do not show again selected")
+                    self.settings.set_no_update_info(False)
+            else:
+                print("Bug, please fix me.")
+
         super().__init__()
         
         self.data_folder = env.absolute_path('data\\')
@@ -761,7 +874,7 @@ class ManhwaViewer(QMainWindow):
             modulefiles.generate()
         extensionfiles.make_sure_not_empty()
 
-        self.logger = apt.logs.monitor_stdout(f"{self.data_folder}logs.txt")
+        self.logger = apt.io.loggers.monitor_stdout(f"{self.data_folder}logs.txt")
 
         self.theme = ""
         self.setupUi()
@@ -769,12 +882,12 @@ class ManhwaViewer(QMainWindow):
         if get_windows_theme().lower() != self.theme:
             self.update_theme()
 
-        self.setWindowTitle('Manhwa Viewer 1.6')
+        self.setWindowTitle('Manhwa Viewer 1.6.1')
         self.setWindowIcon(QIcon(f'{self.data_folder}Untitled-1-noBackground.png'))
         
         db_path = f"{self.data_folder}data.db"
         self.new = not os.path.isfile(db_path)
-        self.db = apt.database.DBManager(db_path)
+        self.db = apt.data.database.DBManager(db_path)
         
         if int(platform.release()) <= 10:
             self.settings = Settings(self.new, self.db, {"geometry": "100, 100, 800, 630"})
@@ -782,7 +895,9 @@ class ManhwaViewer(QMainWindow):
         else:
             self.settings = Settings(self.new, self.db)
             self.settings.set_geometry([100, 100, 640, 480])
-        
+            
+        check_for_update()
+
         g = self.settings.get_geometry()
         self.setGeometry(g[0], g[1], g[2], g[3])
         
@@ -798,8 +913,8 @@ class ManhwaViewer(QMainWindow):
             self.prov = self.providers[f"AutoProviderPlugin{self.settings.get_autoprovider()}"](self.settings.get_title(), self.settings.get_chapter(), self.settings.get_chapter_rate(), self.data_folder, self.cache_folder, self.settings.get_provider_type())
             self.logo_path = self.prov.get_logo_path()
             self.prov.set_blacklisted_websites(self.settings.get_blacklisted_websites())
-        print(self.prov)
-        self.setWindowTitle(f'MV 1.6 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
+        print(self.prov, "Loading:", self.prov.get_title(), "Chapter", self.prov.get_chapter())
+        self.setWindowTitle(f'MV 1.6.1 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
         
         self.previous_window_width = 0
         self.manual_content_width = self.settings.get_manual_content_width()
@@ -810,9 +925,6 @@ class ManhwaViewer(QMainWindow):
         self.content_paths = self.get_content_paths()
         self.task_successful = False
         self.threading = False
-        
-        # Image Labels
-        self.reload_content() # Sets self.content_widgets
         
         if self.settings.get_provider() == "file":
             self.plugin_radio_button_file.setChecked(True)
@@ -855,9 +967,13 @@ class ManhwaViewer(QMainWindow):
 
         self.connectSignals()
         self.show()
-        self.onRadioBtnToggled()
+        # Image Labels
+        self.force_update = False # Moved here for better responsiveness, as lazy loading isn't introduced or stable yet
+        self.reload_content() # Sets self.content_widgets
+        self.onRadioBtnToggled(True)
         self.update_provider_logo()
         self.update_content()
+        QTimer.singleShot(50, self.set_scroll_positions)
         
     def setupUi(self):
         # Central Widget
@@ -1071,6 +1187,11 @@ class ManhwaViewer(QMainWindow):
         self.animation.valueChanged.connect(self.update_button_position) # Menu
         self.timer.timeout.connect(self.timer_tick)
         
+    def set_scroll_positions(self):
+        scrollBarValues = self.settings.get_last_scroll_positions()
+        self.scroll_area.verticalScrollBar().setValue(scrollBarValues[0])
+        self.scroll_area.horizontalScrollBar().setValue(scrollBarValues[1])
+
     def change_provider_type(self):
         self.settings.set_provider_type(self.provider_type_combobox.currentText().lower())
         self.prov.set_provider(self.settings.get_provider_type())
@@ -1215,17 +1336,18 @@ class ManhwaViewer(QMainWindow):
             self.settings.set_auto_export(self.auto_export_checkbox.isChecked()) # Export settings can't get saved here
             if self.prov.__class__ != ManhwaFilePlugin: self.settings.set_provider_type(self.prov.get_provider())
             if self.prov.__class__ != ManhwaFilePlugin: self.settings.set_chapter_rate(self.prov.get_chapter_rate())
+            self.settings.set_last_scroll_positions([self.scroll_area.verticalScrollBar().value(), self.scroll_area.horizontalScrollBar().value()])
             
             sys.stdout.close() # self.logger.close()
             self.db.close()
 
-            self.prov.redo_prep()
+            #self.prov.redo_prep()
             event.accept() # let the window close
         else:
             print("Couldn't exit.")
             event.ignore()
         
-    def onRadioBtnToggled(self):
+    def onRadioBtnToggled(self, no_change=False):
         if self.plugin_radio_button_file.isChecked():
             self.prov = ManhwaFilePlugin(self.settings.get_chapter(), self.settings.get_file_path(), self.data_folder, self.cache_folder)
             self.logo_path = f"{self.data_folder}empty.png"
@@ -1265,7 +1387,7 @@ class ManhwaViewer(QMainWindow):
             self.provider_type_combobox.setEnabled(True)
             self.chapter_rate_label.setEnabled(True)
             self.chapter_rate_selector.setEnabled(True)
-            self.change_provider()
+            if not no_change: self.change_provider()
         #self.repaint()
             
     def change_provider(self):
@@ -1305,9 +1427,11 @@ class ManhwaViewer(QMainWindow):
                 self.plugin_radio_button_file.setChecked(True)
         
     def set_title(self):
-        self.settings.set_title(self.title_selector.text())
-        self.prov.set_title(self.title_selector.text())
-        
+        new_title = self.title_selector.text()
+        self.settings.set_title(new_title.strip())
+        self.prov.set_title(new_title.strip())
+        self.title_selector.setText(new_title)
+
     def set_chapter(self):
         new_chapter = float("0" + self.chapter_selector.text())
         if new_chapter >= 0 and new_chapter < 1000:
@@ -1349,7 +1473,7 @@ class ManhwaViewer(QMainWindow):
         
     def resizeEvent(self, event):
         self.window_width = self.width()
-        self.settings.set_geometry([100, 100, self.width(), self.height()])
+        #self.settings.set_geometry([100, 100, self.width(), self.height()])
         
         self.side_menu.move(self.window_width, 0) # Update the position of the side menu
         self.animation.setStartValue(QRect(self.window_width, 0, 0, self.height()))
@@ -1450,7 +1574,8 @@ class ManhwaViewer(QMainWindow):
             self.prev_upscale_state != self.upscale_checkbox.isChecked() or self.upscale_checkbox.isChecked() and self.standart_image_width < scroll_area_width,
             self.manual_content_width and self.manual_content_width != self.content_width and not 
             ((self.downscale_checkbox.isChecked() and self.standart_image_width >= scroll_area_width) or 
-            (self.upscale_checkbox.isChecked() and self.standart_image_width <= scroll_area_width))
+            (self.upscale_checkbox.isChecked() and self.standart_image_width <= scroll_area_width)),
+            self.force_update
         ]
         if any(conditions) or self.content_width == 0: # Check if images are not loaded yet
             self.previous_window_width = self.window_width
@@ -1473,11 +1598,13 @@ class ManhwaViewer(QMainWindow):
                     new_image_width = scroll_area_width
                 elif not self.manual_content_width and new_image_width < scroll_area_width:
                     new_image_width = scroll_area_width
+            self.force_update = False
             return new_image_width
         return None
 
     def reload_content(self):
         self.content_paths = self.get_content_paths()
+        print(self.content_paths)
         
         # Clear existing content
         if hasattr(self, "content_widgets") and self.content_widgets != None:
@@ -1524,11 +1651,11 @@ class ManhwaViewer(QMainWindow):
                 pass
             
             self.content_layout.addWidget(self.content_widgets[-1])
-            #print(f"Added widget {self.content_widgets[-1]}") # Debug
+            print(f"Added widget {self.content_widgets[-1]}") # Debug
         
         self.content_layout.addWidget(self.buttons_widget)
         if hasattr(self, "content_widgets") and self.content_widgets != None: self.update_content()
-        
+          # The Wicked Princess Plans for Her Life
     def next_chapter(self):
         self.threading = True
         self.progressDialog = CustomProgressDialog(self, windowTitle="Loading ...", windowIcon=f"{self.data_folder}Untitled-1-noBackground.png", func=self.prov.next_chapter)
@@ -1538,7 +1665,7 @@ class ManhwaViewer(QMainWindow):
         self.threading = False
 
         if self.task_successful:
-            self.setWindowTitle(f'MV 1.6 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
+            self.setWindowTitle(f'MV 1.6.1 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
             self.settings.set_chapter(self.prov.get_chapter())
             if self.settings.get_auto_export() and self.settings.get_provider() == "auto": self.export_chapter()
             self.task_successful = False
@@ -1552,7 +1679,9 @@ class ManhwaViewer(QMainWindow):
         self.chapter_selector.setText(str(self.settings.get_chapter()))
         print("Reloading images...")
         self.scroll_area.verticalScrollBar().setValue(0) # Reset the scrollbar position to the top
+        self.scroll_area.horizontalScrollBar().setValue((self.scroll_area.width() // 2))
         self.reload_content()
+        self.force_update = True
         
     def previous_chapter(self):
         self.threading = True
@@ -1563,7 +1692,7 @@ class ManhwaViewer(QMainWindow):
         self.threading = False
 
         if self.task_successful:
-            self.setWindowTitle(f'MV 1.6 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
+            self.setWindowTitle(f'MV 1.6.1 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
             self.settings.set_chapter(self.prov.get_chapter())
             if self.settings.get_auto_export() and self.settings.get_provider() == "auto": self.export_chapter()
             self.task_successful = False
@@ -1577,7 +1706,9 @@ class ManhwaViewer(QMainWindow):
         self.chapter_selector.setText(str(self.settings.get_chapter()))
         print("Reloading images...")
         self.scroll_area.verticalScrollBar().setValue(0) # Reset the scrollbar position to the top
+        self.scroll_area.horizontalScrollBar().setValue((self.scroll_area.width() // 2))
         self.reload_content()
+        self.force_update = True
         
     def reload_chapter(self):
         self.threading = True
@@ -1588,7 +1719,7 @@ class ManhwaViewer(QMainWindow):
         self.threading = False
 
         if self.task_successful:
-            self.setWindowTitle(f'MV 1.6 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
+            self.setWindowTitle(f'MV 1.6.1 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
             self.settings.set_chapter(self.prov.get_chapter())
             if self.settings.get_auto_export() and self.settings.get_provider() == "auto": self.export_chapter() # Keep?
             self.task_successful = False
@@ -1602,7 +1733,9 @@ class ManhwaViewer(QMainWindow):
         self.chapter_selector.setText(str(self.settings.get_chapter()))
         print("Reloading images...")
         self.scroll_area.verticalScrollBar().setValue(0) # Reset the scrollbar position to the top
+        self.scroll_area.horizontalScrollBar().setValue((self.scroll_area.width() // 2))
         self.reload_content()
+        self.force_update = True
 
     def set_light_theme(self):
         self.setStyleSheet("""
@@ -1800,7 +1933,7 @@ class ManhwaViewer(QMainWindow):
         if random.randint(0, 20) == 0 and get_windows_theme().lower() != self.theme:
             self.update_theme()
         #print("Update tick") # Debug
-
+        
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle("Fusion") # QStyleFactory.keys()

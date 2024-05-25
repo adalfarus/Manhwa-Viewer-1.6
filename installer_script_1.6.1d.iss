@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "ManhwaViewer"
-#define MyAppVersion "1.6"
+#define MyAppVersion "1.6.1"
 #define MyAppPublisher "Cariel Becker"
 #define MyAppURL "https://www.cariel-becker.com/"
 #define MyAppExeName "manhwaviewer.exe"
@@ -13,7 +13,7 @@
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
-AppId={{55217840-8CA5-4AE3-BC78-51727EBE3C32}
+AppId={{91A6ADA4-4498-4A8D-9F6F-B08C7DE6D7AA}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 ;AppVerName={#MyAppName} {#MyAppVersion}
@@ -30,7 +30,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ;PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=.\
-OutputBaseFilename=manhwaviewer-v1.6-win10-11-x64-installer
+OutputBaseFilename=manhwaviewer-v1.6.1-win-x64-installer
 SetupIconFile=.\data\Untitled-1.ico
 Compression=lzma
 SolidCompression=yes
