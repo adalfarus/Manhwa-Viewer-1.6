@@ -1,6 +1,6 @@
 from extensions.AutoProviderPlugin import AutoProviderPlugin
 from duckduckgo_search import DDGS
-from googlesearch import search
+from aplustools.webtools import Search
 from urllib.parse import urlencode, urlunparse, quote_plus
 import requests
 from bs4 import BeautifulSoup
@@ -19,15 +19,7 @@ class AutoProviderPluginGoogle(AutoProviderPlugin):
             f'manga {self.title} chapter {self.chapter}',
             f'manga {self.title}'
         ]
-        for query in queries:
-            results = search(query, num_results=10, advanced=True)
-            for i in results:
-                url = self._get_url(i.url, i.title)
-                if url:
-                    print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
-                    return url
-        print("No crawlable URL found.")
-        return None
+        return Search.google_provider(queries)
         
 class AutoProviderPluginDuckDuckGo(AutoProviderPlugin):
     def __init__(self, title, chapter, data_folder, cache_folder, provider):
@@ -41,16 +33,7 @@ class AutoProviderPluginDuckDuckGo(AutoProviderPlugin):
             f'manga {self.title} chapter {self.chapter}',
             f'manga {self.title}'
         ]
-        with DDGS(timeout=20) as ddgs:
-            for query in queries:
-                results = ddgs.text(query, timelimit=100, safesearch='off')
-                for r in results:
-                    url = self._get_url(r['href'], r['title'])
-                    if url:
-                        print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
-                        return url
-        print("No crawlable URL found.")
-        return None
+        return Search.duckduckgo_provider(queries)
         
 class AutoProviderPluginBing(AutoProviderPlugin):
     def __init__(self, title, chapter, data_folder, cache_folder, provider):
@@ -64,23 +47,7 @@ class AutoProviderPluginBing(AutoProviderPlugin):
             f'manga {self.title} chapter {self.chapter}',
             f'manga {self.title}'
         ]
-        custom_user_agent = "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:47.0) Gecko/20100101 Firefox/47.0"
-        for query in queries:
-            url = f'https://www.bing.com/search?q={quote_plus(query)}'
-            headers = {"User-Agent": custom_user_agent}
-            response = requests.get(url, headers=headers)
-            if response.status_code != 200:
-                print("Failed to retrieve the search results.")
-                continue
-            soup = BeautifulSoup(response.text, 'html.parser')
-            links = [[a.text, a['href']] for a in soup.find_all('a', href=True) if 'http' in a['href']]
-            for link in links:
-                url = self._get_url(link[1], link[0])
-                if url:
-                    print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
-                    return url
-        print("No crawlable URL found.")
-        return None
+        return Search.bing_provider(queries)
 
 class AutoProviderPluginManhwaClan(AutoProviderPlugin):
     def __init__(self, title, chapter, data_folder, cache_folder, provider):
@@ -113,11 +80,9 @@ class AutoProviderPluginMangaKakalot(AutoProviderPlugin):
     def _direct_provider(self):
         if not self.manga_abbreviation:
             query = f'manga "{self.title}" site:{self.specific_provider_website} -chapter'
-            results = search(query, num_results=10, advanced=True)
-            for i in results:
-                if self.title.lower() in i.title.lower() and not "chapter" in i.title.lower():
-                    self.manga_abbreviation = i.url.split("/")[-1]
-                    break  # Break the loop once the abbreviation is found
+            result = Search.duckduckgo_provider(query)
+            #if self.title.lower() in i.title.lower() and not "chapter" in i.title.lower():
+            self.manga_abbreviation = result.split("/")[-1]
 
         if not self.manga_abbreviation:
             self._switch_website()  # Switch website if abbreviation is not found and retry
@@ -173,17 +138,17 @@ class AutoProviderPluginMangaQueen(AutoProviderPlugin):
             return url
         return None
 
-class AutoProviderPluginMangaGirl(AutoProviderPlugin):
-    def __init__(self, title, chapter, data_folder, cache_folder, provider):
-        super().__init__(title=title, chapter=chapter, data_folder=data_folder, cache_folder=cache_folder, provider=provider, specific_provider_website="www.mangagirl.me", logo_path="./data/MangaGirlLogo.png")
-        #self._download_logo_image('https://cdn.mangagirl.me/wp-content/uploads/2022/09/mangagirl-logo.png', "MangaGirlLogo", img_format='png')
-        
-    def _direct_provider(self):
-        url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.title.lower().split())}/chapter-{self.chapter}/', f'chapter {self.chapter} {self.title}')
-        if url:
-            print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
-            return url
-        return None
+# class AutoProviderPluginMangaGirl(AutoProviderPlugin):
+#     def __init__(self, title, chapter, data_folder, cache_folder, provider):
+#         super().__init__(title=title, chapter=chapter, data_folder=data_folder, cache_folder=cache_folder, provider=provider, specific_provider_website="www.mangagirl.me", logo_path="./data/MangaGirlLogo.png")
+#         self._download_logo_image('https://cdn.mangagirl.me/wp-content/uploads/2022/09/mangagirl-logo.png', "MangaGirlLogo", img_format='png')
+#
+#     def _direct_provider(self):
+#         url = self._get_url(f'https://{self.specific_provider_website}/manga/{"-".join(self.title.lower().split())}/chapter-{self.chapter}/', f'chapter {self.chapter} {self.title}')
+#         if url:
+#             print("Found URL:" + url) # Concatenate (add-->+) string, to avoid breaking timestamps
+#             return url
+#         return None
 
 class AutoProviderPluginMangaBuddy(AutoProviderPlugin):
     def __init__(self, title, chapter, data_folder, cache_folder, provider):

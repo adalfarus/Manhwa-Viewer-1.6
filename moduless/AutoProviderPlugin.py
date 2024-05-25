@@ -1,28 +1,31 @@
+from aplustools.webtools import Search
+from aplustools.imagetools import OnlineImage, OfflineImage
+save_image = OnlineImage.save_image
+convert_image_format = OnlineImage.convert_image_format
+download_image = OnlineImage.download_image
+download_logo_image = OnlineImage.download_logo_image
+from aplustools.webtools import check_url, is_crawlable
 import os
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urljoin, urlparse
-from aplustools.webtools import Search
-from duckduckgo_search import DDGS
 import urllib3
+from abc import ABC, abstractmethod
+from PIL import Image
+from typing import Optional, Union
+from urllib.parse import urljoin, urlparse
 from urllib.parse import urlencode, urlunparse, quote_plus
 from urllib.request import urlopen, Request
-import base64
-from abc import ABC, abstractmethod
-import re
-from PIL import Image
-from io import BytesIO
-from extensions.ManhwaFilePlugin import ManhwaFilePlugin
 
 # Disable only the specific InsecureRequestWarning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-class AutoProviderPlugin(ManhwaFilePlugin, ABC):
-    def __init__(self, title, chapter, data_folder, cache_folder, provider, specific_provider_website, logo_path):
-        super().__init__(title, chapter, None, data_folder, cache_folder) # passing None as file_path, as it's not applicable here
-        # Override chapter attribute here
-        self.chapter = int(self.chapter) if float(self.chapter).is_integer() else self.chapter
-        
+class AutoProviderPlugin(ABC):
+    def __init__(self, title: str, chapter: int, chapter_rate: float, data_folder: str, cache_folder: str, provider: str, specific_provider_website: str, logo_path: str):
+        self.title = title
+        self.chap(chapter)
+        self.chapter_rate = chapter_rate
+        self.data_folder = data_folder
+        self.cache_folder = cache_folder
         self.provider = provider
         self.specific_provider_website = specific_provider_website
         self.logo_path = logo_path
@@ -35,28 +38,30 @@ class AutoProviderPlugin(ManhwaFilePlugin, ABC):
             "onepiece.fandom.com"
         ]
         self.current_url = None
-        #self.update_current_url()
-        
-    def read_mwa_file_chapter(self):
-        return # Overwrite unessesary method
-        
+
     def get_logo_path(self):
         return self.logo_path
         
+    def set_title(self, new_title):
+        self.title = new_title
+        
+    def get_title(self):
+        return self.title
+
     def set_chapter(self, new_chapter):
         self.chapter = new_chapter
-        self.chapter = int(self.chapter) if float(self.chapter).is_integer() else self.chapter
+        self.chap()
         
     def get_chapter(self):
-        self.chapter = int(self.chapter) if float(self.chapter).is_integer() else self.chapter
+        self.chap()
         return self.chapter
         
-    def set_file_path(self, new_file_path):
-        return # Overwrite unessesary method
+    def set_chapter_rate(self, new_chapter_rate):
+        self.chapter_rate = new_chapter_rate
         
-    def get_file_path(self):
-        return # Overwrite unessesary method
-        
+    def get_chapter_rate(self):
+        return self.chapter_rate
+
     def set_provider(self, new_provider):
         self.provider = new_provider
         
@@ -75,65 +80,54 @@ class AutoProviderPlugin(ManhwaFilePlugin, ABC):
     def get_blacklisted_websites(self):
         return self.blacklisted_websites
         
+    def chap(self, chapter=None):
+        if chapter is not None:
+            self.chapter = int(chapter) if float(chapter).is_integer() else chapter
+            self.chapter_str = str(self.chapter).replace(".", "-")
+        else:
+            self.chapter = int(self.chapter) if float(self.chapter).is_integer() else self.chapter
+            self.chapter_str = str(self.chapter).replace(".", "-")
+
     def next_chapter(self):
-        self.chapter += 0.5
-        self.chapter = int(self.chapter) if float(self.chapter).is_integer() else self.chapter
+        self.chapter += self.chapter_rate
+        self.chap()
         if self.update_current_url():
             return self.cache_current_chapter()
         else:
             return False
         
     def previous_chapter(self):
-        self.chapter -= 0.5
-        self.chapter = int(self.chapter) if float(self.chapter).is_integer() else self.chapter
+        self.chapter -= self.chapter_rate
+        self.chap()
         if self.update_current_url():
             return self.cache_current_chapter()
         else:
             return False
         
     def reload_chapter(self):
-        self.chapter = int(self.chapter) if float(self.chapter).is_integer() else self.chapter
+        self.chap()
         if self.update_current_url():
             return self.cache_current_chapter()
         else:
             return False
             
-    def _download_logo_image(self, img_url, new_name, img_format):
-        try:
-            format_match = re.match(r'^data:image/[^;]+;base64,', img_url)
-            if format_match:
-                if "image/svg+xml" in img_url:
-                    print("SVG format is not supported.")
-                    return False
-                img_data = base64.b64decode(img_url.split(',')[1])
-                img_name = new_name + '.' + img_format
-                source_path = os.path.join(self.data_folder, img_name)
-                with open(source_path, 'wb') as img_file:
-                    img_file.write(img_data)
-            else:
-                response = requests.get(img_url, verify=False, timeout=5)
-                response.raise_for_status()
-                img_name = os.path.basename(urlparse(img_url).path)
-                source_path = os.path.join(self.data_folder, img_name)
-                img_data = response.content
-                with open(source_path, 'wb') as img_file:
-                    img_file.write(img_data)
-            if img_name.strip():
-                self._convert_image_format(source_path, new_name, img_format)
-                return True
-            else:
-                return False
-        except KeyError:
-            print("The image tag does not have a src attribute.")
-            return False
-        #except Exception as e:
-        #    print(f"An error occurred while downloading the image: {e}")
-        #    return False
+    def _download_logo_image(self, img_url: str, new_name: str, img_format: str, img_type: Optional[str]=None):
+        image = OnlineImage(img_url)
+        if img_type is None:
+            download_logo_image(img_url, new_name, img_format)
+        elif img_type.lower() == "url":
+            image.download_image(self.data_folder, img_url, new_name, img_format)
+        elif img_type.lower() == "base64":
+            image.base64(self.data_folder, new_name, img_format, img_url) # Moved data to the back to avoid using keyword arguments
         
+    def redo_prep(self):
+        self._empty_cache()
+        image = Image.open(f"{self.data_folder}empty.png")
+        image.save(f"{self.cache_folder}empty.png")
+
     def update_current_url(self):
         print("Updating current URL...")
         self.current_url = self._get_current_chapter_url()
-        self.chapter = float(str(self.chapter).replace("-", "."))
         if self.current_url:
             print(f"Current URL set to: {self.current_url}")
             return True
@@ -146,35 +140,18 @@ class AutoProviderPlugin(ManhwaFilePlugin, ABC):
             "google": self._google_provider,
             "duckduckgo": self._duckduckgo_provider,
             "bing": self._bing_provider,
+            "indirect": self._indirect_provider,
             "direct": self._direct_provider
         }.get(self.provider.lower())
 
         if provider_function:
-            self.chapter = str(self.chapter).replace(".", "-")
             return provider_function()
         else:
             print(f"Provider {self.provider} not supported.")
             return None
             
     def _get_url(self, url, title):
-        if self.title.lower() in title.lower() and f"chapter {self.chapter}" in title.lower():
-            # Checking if the URL is accessible or leads to a 404 error
-            try:
-                response = requests.head(url, allow_redirects=True)  # Using HEAD request to get the headers
-                if response.status_code == 404:
-                    print(f"The URL {url} leads to a 404 error, checking next result...")
-                    return None
-            except requests.RequestException as e:
-                print(f"Error accessing URL {url}: {e}, checking next result...")
-                return None
-            if self._is_crawlable(url):
-                if not url.split("/")[2] in self.blacklisted_websites:
-                    return url
-                else:
-                    print("Blacklisted URL:" + url)
-            else:
-                print(f"The URL {url} cannot be crawled, checking next result...")
-        return None
+        return check_url(url, title, [self.title, str(self.chapter)])
         
     def _google_provider(self):
         queries = [
@@ -184,7 +161,8 @@ class AutoProviderPlugin(ManhwaFilePlugin, ABC):
             f'manga {self.title} site:{self.specific_provider_website}',
             f'manga site:{self.specific_provider_website}'
         ]
-        return Search.google_provider(queries)
+        search = Search()
+        return search.google_provider(queries)
         
     def _duckduckgo_provider(self):
         queries = [
@@ -194,7 +172,8 @@ class AutoProviderPlugin(ManhwaFilePlugin, ABC):
             f'manga {self.title} site:{self.specific_provider_website}',
             f'manga site:{self.specific_provider_website}'
         ]
-        return Search.duckduckgo_provider(queries)
+        search = Search()
+        return search.duckduckgo_provider(queries)
         
     def _bing_provider(self):
         queries = [
@@ -204,12 +183,22 @@ class AutoProviderPlugin(ManhwaFilePlugin, ABC):
             f'manga {self.title} site:{self.specific_provider_website}',
             f'manga site:{self.specific_provider_website}'
         ]
+        search = Search()
         return Search.bing_provider(queries)
                 
+    @abstractmethod
+    def _indirect_provider(self): # Can't be generalized, you need to overwrite this
+        return None
+    
     @abstractmethod
     def _direct_provider(self): # Can't be generalized, you need to overwrite this
         return None
             
+    def _empty_cache(self):
+        files = os.listdir(self.cache_folder)
+        for f in files:
+            os.remove(f"{self.cache_folder}{f}")
+
     def _make_cache_readable(self):
         # List all files in the directory
         files = os.listdir(self.cache_folder)
@@ -220,37 +209,25 @@ class AutoProviderPlugin(ManhwaFilePlugin, ABC):
         if len(numerical_files) < 5 and self.provider.lower() != "direct":
             self.blacklisted_websites.append(self.current_url.split("/")[2])
         for i, file in enumerate(numerical_files):
-            # Define file name
-            file_name = file.split(".")[0]
+            f_lst = file.split(".")
+            # Define file name and extension
+            file_name = f_lst[0]
+            file_extension = f_lst[-1]
             # Generate a new file name with three digits
             new_name = str(i+1).zfill(3)
             # Convert the file to png and rename it to new_name var
-            self._convert_image_format(os.path.join(self.cache_folder, file), new_name=new_name, target_format='png')
+            convert_image_format('', self.cache_folder, file_name, file_extension, new_name=new_name, target_format='png')
             print(f'Renamed {file} to {new_name}')
             
     def _download_image(self, img_tag):
-        try:
-            img_url = urljoin(self.current_url, img_tag['src'])
-            img_name = os.path.basename(urlparse(img_url).path)
-            print(img_name)
-            name = img_name.split(".")[0]
-            extension = None
-            try: extension = img_name.split(".")[1]
-            except: pass
-            
-            if img_name.strip():
-                img_data = requests.get(img_url, verify=False).content
-                self._save_image(self.cache_folder, img_data, name, extension, new_name=None, target_format=None)
-        except KeyError:
-            print("The image tag does not have a src attribute.")
-        except Exception as e:
-            print(f"An error occurred while downloading the image: {e}")
+        image = OnlineImage(urljoin(self.current_url, img_tag['src']))
+        image.download_image(self.cache_folder)
             
     def cache_current_chapter(self):
         if not self.current_url:
             print("URL nor found.")
             return False
-        if not self._is_crawlable(self.current_url):
+        if not is_crawlable(self.current_url):
             print("URL not crawlable as per robots.txt.")
             return False
             

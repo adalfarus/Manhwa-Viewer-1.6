@@ -66,24 +66,8 @@
    "value": "./extensionss;extensions/"
   },
   {
-   "optionDest": "hiddenimports",
-   "value": "PIL.Image"
-  },
-  {
-   "optionDest": "hiddenimports",
-   "value": "requests"
-  },
-  {
-   "optionDest": "hiddenimports",
-   "value": "bs4"
-  },
-  {
-   "optionDest": "hiddenimports",
-   "value": "googlesearch"
-  },
-  {
-   "optionDest": "hiddenimports",
-   "value": "duckduckgo_search"
+   "optionDest": "datas",
+   "value": "./moduless;modules/"
   }
  ],
  "nonPyinstallerOptions": {

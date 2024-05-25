@@ -6,93 +6,26 @@ from PySide6.QtWidgets import (QApplication, QLabel, QVBoxLayout, QScrollArea,
                              QFrame, QComboBox, QFormLayout, QSlider, QLineEdit,
                              QRadioButton, QDialog, QGroupBox, QToolButton, 
                              QDialogButtonBox, QMessageBox, QFileDialog, 
-                             QProgressDialog)
-from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QDoubleValidator
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QThread, Signal, Slot
+                             QProgressDialog, QStyleFactory)
+from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QDoubleValidator, QFont
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QThread, Signal, Slot, QUrl
+from PySide6.QtMultimedia import QMediaPlayer
+from PySide6.QtMultimediaWidgets import QVideoWidget
+from PySide6.QtWebEngineWidgets import QWebEngineView
 from extensions.ManhwaFilePlugin import ManhwaFilePlugin
 from extensions.AutoProviderPlugin import AutoProviderPlugin
 from extensions.extra_autoprovider_plugins import *
+from aplustools import setdirtoex # Just import needed
+import aplustools as apt
 from pathlib import Path
 import importlib.util
-import threading # Implement, needed if website is very slow
+import threading
 import base64
-import ctypes # Implement, needed if website is very slow
+import ctypes
 import json
 import time
 import sys
 import os
-
-# Get the directory where the script (or frozen exe) is located
-if getattr(sys, 'frozen', False):
-    # If the script is running as a bundled executable created by PyInstaller
-    script_dir = os.path.dirname(sys.executable)
-else:
-    # If the script is running as a normal Python script
-    script_dir = os.path.dirname(os.path.realpath(__file__))
-
-# Change the current working directory to the script directory
-os.chdir(script_dir)
-
-class Logger(object):
-    def __init__(self, filename="Default.log"):
-        self.terminal = sys.stdout
-        self.log = open(filename, "a")
-
-    def write(self, message):
-        timestamp = f"[{time.strftime('%Y-%m-%d %H:%M:%S', time.gmtime())}] "
-        message_with_timestamp = timestamp + message if message != '\n' else message
-        if self.terminal is not None:
-            try:
-                self.terminal.write(message_with_timestamp)
-            except Exception as e:
-                pass
-        self.log.write(message_with_timestamp)
-        self.log.flush()
-
-    def flush(self):
-        # this flush method is needed for python 3 compatibility.
-        # this handles the flush command by doing nothing.
-        # you might want to specify some extra behavior here.
-        pass
-        
-def monitor_stdout(log_file):
-    sys.stdout = Logger(log_file)
-        
-class Database:
-    def __init__(self, path):
-        import sqlite3
-        self.conn = sqlite3.connect(path)
-        self.cursor = self.conn.cursor()
-
-    def create_table(self, table_name: str, columns: list):
-        # Construct the CREATE TABLE query using the provided table name and columns
-        query = f"CREATE TABLE IF NOT EXISTS {table_name} ({', '.join(columns)})"
-        self.cursor.execute(query)
-        self.conn.commit()
-
-    def update_info(self, info: list, table: str, columns: list):
-        # Check if the length of info matches the number of columns
-        if len(info) != len(columns):
-            raise ValueError("Length of info must match the number of columns.")
-
-        # Construct the INSERT INTO query
-        col_names = ", ".join(columns)
-        placeholders = ", ".join("?" for _ in info)
-        query = f"INSERT INTO {table} ({col_names}) VALUES ({placeholders})"
-        
-        self.cursor.execute(query, info)
-        self.conn.commit()
-
-    def get_info(self, table: str, columns: list) -> list:
-        col_names = ", ".join(columns)
-        query = f"SELECT {col_names} FROM {table}"
-        self.cursor.execute(query)
-        
-        return self.cursor.fetchall()
-        
-    def close(self):
-        self.conn.commit()
-        self.conn.close()
         
 class AutoProviderManager:
     def __init__(self, path):
@@ -133,6 +66,7 @@ class Settings:
         if self.new == True: self.setup_database(self.settings)
         self.fetch_data()
         self.convert_settings()
+        print(self.settings)
         
     def convert_settings(self):
         if isinstance(self.settings, list):
@@ -202,11 +136,11 @@ class Settings:
         self.settings["upscaling"] = str(new_upscaling)
         self.update_data()
         
-    def get_manual_width(self):
+    def get_manual_content_width(self):
         return int(self.settings["manual_width"])
         
-    def set_manual_width(self, new_manual_width):
-        self.settings["manual_width"] = str(new_manual_width)
+    def set_manual_content_width(self, new_manual_content_width):
+        self.settings["manual_width"] = str(new_manual_content_width)
         self.update_data()
         
     def get_borderless(self):
@@ -570,16 +504,38 @@ class ManhwaViewer(QMainWindow):
         self.data_folder = absolute_path('data\\')
         self.cache_folder = absolute_path('cache\\')
         
-        monitor_stdout(f"{self.data_folder}logs.txt")
+        self.logger = apt.logs.monitor_stdout(f"{self.data_folder}logs.txt")
         
         self.setupUi()
         
-        self.setWindowTitle('Manhwa Viewer 1.2')
+        self.setStyleSheet("""
+            QWidget {
+            background-color: #f0f0f0;
+            }
+            QLable {
+                font-size: 18px;
+                border-radius: 5px;
+                padding: 10px;
+                background-color: #d0d0d0;
+            }
+            QPushButton {
+                font-size: 18px;
+                border: 1px solid #808080;
+                border-radius: 5px;
+                padding: 10px;
+                background-color: #e0e0e0;
+            }
+            QPushButton:hover {
+                background-color: #c0c0c0;
+            }
+        """)
+        
+        self.setWindowTitle('Manhwa Viewer 1.5')
         self.setWindowIcon(QIcon(f'{self.data_folder}logo2.png'))
         
         db_path = Path(f"{self.data_folder}data.db")
         self.new = not db_path.is_file()
-        self.db = Database(db_path)
+        self.db = apt.database.DBManager(db_path)
         
         self.settings = Settings(self.new, self.db)
         
@@ -599,26 +555,20 @@ class ManhwaViewer(QMainWindow):
             self.logo_path = self.prov.get_logo_path()
             self.prov.set_blacklisted_websites(self.settings.get_blacklisted_websites())
         print(self.prov)
-        self.setWindowTitle(f'MV 1.2 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
+        self.setWindowTitle(f'MV 1.5 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
         
-        self.current_width = 0
-        self.manual_width = self.settings.get_manual_width()
+        self.previous_window_width = 0
+        self.manual_content_width = self.settings.get_manual_content_width()
         self.window_width = 0
-        self.current_image_width = 0
+        self.content_width = 0
         self.prev_downscale_state = self.settings.get_downscaling()
         self.prev_upscale_state = self.settings.get_upscaling()
-        self.image_paths = self.get_image_paths()
+        self.content_paths = self.get_content_paths()
         self.task_successful = False
         self.threading = False
         
         # Image Labels
-        self.image_labels = []
-        for image_path in self.image_paths:
-            image_label = QLabel()
-            image_label.setAlignment(Qt.AlignCenter)
-            self.content_layout.addWidget(image_label)
-            self.image_labels.append(image_label)
-        self.content_layout.addWidget(self.buttons_widget)
+        self.reload_content() # Sets self.content_widgets
         
         if self.settings.get_provider() == "file":
             self.plugin_radio_button_file.setChecked(True)
@@ -639,7 +589,7 @@ class ManhwaViewer(QMainWindow):
         self.chapter_selector.setText(str(self.prov.get_chapter()))
         self.downscale_checkbox.setChecked(self.settings.get_downscaling())
         self.upscale_checkbox.setChecked(self.settings.get_upscaling())
-        self.width_spinbox.setValue(self.settings.get_manual_width())
+        self.width_spinbox.setValue(self.settings.get_manual_content_width())
         self.borderless_checkbox.setChecked(self.settings.get_borderless())
         self.invisible_background_checkbox.setChecked(self.settings.get_invisible_background())
         self.hide_scrollbar_checkbox.setChecked(self.settings.get_hide_scrollbar())
@@ -650,7 +600,7 @@ class ManhwaViewer(QMainWindow):
         if self.settings.get_provider() == "file": self.reload_chapter()
         self.onRadioBtnToggled()
         self.update_provider_logo()
-        self.update_images()
+        self.update_content()
         
     def setupUi(self):
         # Central Widget
@@ -699,7 +649,8 @@ class ManhwaViewer(QMainWindow):
         palette = self.side_menu.palette()
         palette.setColor(self.side_menu.backgroundRole(), QColor('#cccccc'))
         self.side_menu.setPalette(palette)
-        self.side_menu.move(800, 0)
+        self.side_menu.move(int(self.width() * 2/3), 0)
+        self.side_menu.resize(int(self.width() / 3), self.height())
         
         # Animation for Side Menu
         self.animation = QPropertyAnimation(self.side_menu, b"geometry")
@@ -818,7 +769,7 @@ class ManhwaViewer(QMainWindow):
         self.chapter_selector.textChanged.connect(self.set_chapter)
         
         self.menu_button.clicked.connect(self.toggle_menu) # Menu
-        self.apply_button.clicked.connect(self.apply_manual_width) # Menu
+        self.apply_button.clicked.connect(self.apply_manual_content_width) # Menu
         self.prev_chapter_button.clicked.connect(self.previous_chapter) # Menu
         self.next_chapter_button.clicked.connect(self.next_chapter) # Menu
         self.reload_chapter_button.clicked.connect(self.reload_chapter) # Menu
@@ -876,7 +827,7 @@ class ManhwaViewer(QMainWindow):
 
         # Convert images to base64
         base64_encoded_images = []
-        for image_path in self.image_paths:
+        for image_path in self.content_paths:
             with open(image_path, 'rb') as image_file:
                 base64_encoded = base64.b64encode(image_file.read()).decode()
                 base64_encoded_images.append({"type": "base64", "data": base64_encoded})
@@ -955,7 +906,7 @@ class ManhwaViewer(QMainWindow):
             self.settings.set_chapter(self.prov.get_chapter())
             self.settings.set_downscaling(self.downscale_checkbox.isChecked())
             self.settings.set_upscaling(self.upscale_checkbox.isChecked())
-            self.settings.set_manual_width(self.width_spinbox.value())
+            self.settings.set_manual_content_width(self.width_spinbox.value())
             self.settings.set_borderless(self.borderless_checkbox.isChecked())
             self.settings.set_invisible_background(self.invisible_background_checkbox.isChecked())
             self.settings.set_hide_scrollbar(self.hide_scrollbar_checkbox.isChecked())
@@ -963,6 +914,10 @@ class ManhwaViewer(QMainWindow):
             self.settings.set_geometry([100, 100, self.width(), self.height()])
             self.settings.set_blacklisted_websites(self.prov.get_blacklisted_websites())
             self.settings.set_auto_export(self.auto_export_checkbox.isChecked()) # Export settings can't get saved here
+            
+            sys.stdout.close() # self.logger.close()
+            self.db.close()
+
             self.prov.redo_prep()
             event.accept() # let the window close
         else:
@@ -1017,7 +972,7 @@ class ManhwaViewer(QMainWindow):
                                       QMessageBox.Yes)
         if result == QMessageBox.Yes:
             self.prov.reload_chapter()
-            self.reload_images()
+            self.reload_content()
         else:
             #state = True if self.prov == temp else False
             self.prov = temp
@@ -1087,22 +1042,34 @@ class ManhwaViewer(QMainWindow):
         self.menu_button.move(self.window_width - 40, 20) # Update the position of the menu button
         
         self.update_provider_logo()
+        self.updateFontSize()
         
         super().resizeEvent(event)
+        
+    def updateFontSize(self):
+        new_font_size = min(max(6, self.width() // 80), 10)
+        font = QFont()
+        font.setPointSize(new_font_size)
+        print(self.side_menu.children())
+        for widget in self.side_menu.children():
+            if hasattr(widget, "setFont"):
+                widget.setFont(font)
+                print(type(widget).__name__)
+            else: print("NOOO")
         
     def update_provider_logo(self):
         max_size = self.width() // 3
         min_size = self.width() // 10
-        current_image_width = self.transparent_image.pixmap().width() if self.transparent_image.pixmap() else 0 # Adjust the size of the transparent image based on window width
-        if not min_size <= current_image_width <= max_size: # If the current image width is outside the min and max size range, resize it
+        content_width = self.transparent_image.pixmap().width() if self.transparent_image.pixmap() else 0 # Adjust the size of the transparent image based on window width
+        if not min_size <= content_width <= max_size: # If the current image width is outside the min and max size range, resize it
             scaled_pixmap = QPixmap(self.logo_path).scaledToWidth(max_size, Qt.SmoothTransformation)
             self.transparent_image.setPixmap(scaled_pixmap)
         self.transparent_image.setFixedSize(max_size, max_size)
         
     def toggle_menu(self):
-        width = 200
+        width = max(200, int(self.width() / 3))
         height = self.height()
-
+        
         if self.side_menu.x() >= self.width():
             start_value = QRect(self.width(), 0, width, height)
             end_value = QRect(self.width() - width, 0, width, height)
@@ -1119,93 +1086,134 @@ class ManhwaViewer(QMainWindow):
         
     def downscale_checkbox_toggled(self):
         self.settings.set_downscaling(self.downscale_checkbox.isChecked())
-        self.update_images()
+        self.update_content()
         
     def upscale_checkbox_toggled(self):
         self.settings.set_upscaling(self.upscale_checkbox.isChecked())
-        self.update_images()
+        self.update_content()
         
-    def apply_manual_width(self):
-        self.manual_width = self.width_spinbox.value()
-        self.settings.set_manual_width(self.width_spinbox.value())
-        self.update_images()
+    def apply_manual_content_width(self):
+        self.manual_content_width = self.width_spinbox.value()
+        self.settings.set_manual_content_width(self.width_spinbox.value())
+        self.update_content()
         
-    def get_image_paths(self): # Make better
-        image_files = sorted([f for f in os.listdir(self.cache_folder) if f.endswith('.png')])
-        image_paths = [os.path.join(self.cache_folder, f) for f in image_files]
-        return image_paths
-        
-    def update_images(self):
+    def get_content_paths(self):
+        content_files = sorted([f for f in os.listdir(self.cache_folder) if f.endswith(('.png', '.mp4', '.txt'))])
+        content_paths = [os.path.join(self.cache_folder, f) for f in content_files]
+        return content_paths
+
+    def update_content(self):
+        #print("Update") # Debug
+        new_image_width = self.get_wanted_size()
+
+        for widget in self.content_widgets:
+            if isinstance(widget, QLabel):  # Assuming QLabel is used for images and text
+                pixmap = widget.pixmap()
+                if pixmap:  # If it's an image
+                    if new_image_width and self.content_width != new_image_width:
+                        for i, image_path in enumerate(self.content_paths):
+                            pixmap = QPixmap(image_path)
+                            pixmap = pixmap.scaledToWidth(new_image_width, Qt.SmoothTransformation)
+                            self.content_width = new_image_width
+                            self.content_widgets[i].setPixmap(pixmap)
+                else:  # If it's text
+                    font = widget.font()
+                    # Apply your logic to resize text, e.g., changing font size
+                    widget.setFont(font)
+                    
+            elif isinstance(widget, QVideoWidget) or isinstance(widget, QWebEngineView):
+                # Apply resizing logic to video and web content widgets
+                widget.setFixedWidth(new_image_width)
+
+    def get_wanted_size(self):
         scroll_area_width = self.scroll_area.viewport().width()
-        try: self.current_image_width = self.image_labels[0].pixmap().width() if self.image_labels[0].pixmap() else 0 # Obtaining the current width of the pixmaps in the labels
+        try: self.content_width = self.content_widgets[1].pixmap().width() if self.content_widgets[0].pixmap() else 0 # Obtaining the current width of the pixmaps in the labels
         except: return False
-        self.standart_image_width = self.current_image_width if not self.manual_width else self.manual_width
+        self.standart_image_width = self.content_width if not self.manual_content_width else self.manual_content_width
         conditions = [
-            self.window_width != self.current_width,
+            self.window_width != self.previous_window_width,
             self.prev_downscale_state != self.downscale_checkbox.isChecked() or self.downscale_checkbox.isChecked() and self.standart_image_width > scroll_area_width,
             self.prev_upscale_state != self.upscale_checkbox.isChecked() or self.upscale_checkbox.isChecked() and self.standart_image_width < scroll_area_width,
-            self.manual_width and self.manual_width != self.current_image_width and not 
+            self.manual_content_width and self.manual_content_width != self.content_width and not 
             ((self.downscale_checkbox.isChecked() and self.standart_image_width >= scroll_area_width) or 
             (self.upscale_checkbox.isChecked() and self.standart_image_width <= scroll_area_width))
         ]
-        if any(conditions) or self.current_image_width == 0: # Check if images are not loaded yet
-            self.current_width = self.window_width
+        if any(conditions) or self.content_width == 0: # Check if images are not loaded yet
+            self.previous_window_width = self.window_width
             self.prev_downscale_state = self.downscale_checkbox.isChecked()
             self.prev_upscale_state = self.upscale_checkbox.isChecked()
             new_image_width = None
             
-            if self.manual_width:
-                new_image_width = self.manual_width
+            if self.manual_content_width:
+                new_image_width = self.manual_content_width
             else:
-                new_image_width = QPixmap(self.image_paths[0]).width()  # Use original image width as fallback
+                new_image_width = QPixmap(self.content_paths[0]).width()  # Use original image width as fallback
                 
             if self.downscale_checkbox.isChecked():
-                if self.manual_width and self.manual_width > scroll_area_width:
+                if self.manual_content_width and self.manual_content_width > scroll_area_width:
                     new_image_width = scroll_area_width
-                elif not self.manual_width and new_image_width > scroll_area_width:
+                elif not self.manual_content_width and new_image_width > scroll_area_width:
                     new_image_width = scroll_area_width
             if self.upscale_checkbox.isChecked(): # two ifs are okay, as the other conditions can't be fullfilled at the same time
-                if self.manual_width and self.manual_width < scroll_area_width:
+                if self.manual_content_width and self.manual_content_width < scroll_area_width:
                     new_image_width = scroll_area_width
-                elif not self.manual_width and new_image_width < scroll_area_width:
+                elif not self.manual_content_width and new_image_width < scroll_area_width:
                     new_image_width = scroll_area_width
-                    
-            if new_image_width and self.current_image_width != new_image_width:
-                for i, image_path in enumerate(self.image_paths):
-                    pixmap = QPixmap(image_path)
-                    pixmap = pixmap.scaledToWidth(new_image_width, Qt.SmoothTransformation)
-                    self.current_image_width = new_image_width
-                    self.image_labels[i].setPixmap(pixmap)
+            return new_image_width
+        return None
+
+    def reload_content(self):
+        self.content_paths = self.get_content_paths()
         
-    def reload_images(self):
-        # Update image paths dynamically
-        self.image_paths = self.get_image_paths()
-
-        # If the number of images has changed, recreate the image labels
-        if len(self.image_labels) != len(self.image_paths):
-            for label in self.image_labels:
-                self.content_layout.removeWidget(label)
-                label.deleteLater()
-
-            self.image_labels = []
-            for image_path in self.image_paths:
+        # Clear existing content
+        if hasattr(self, "content_widgets") and self.content_widgets != None:
+            for widget in self.content_widgets:
+                self.content_layout.removeWidget(widget)
+                widget.deleteLater()
+            
+        self.content_widgets = []
+        for content_path in self.content_paths:
+            if content_path.endswith(('.png', '.jpg', '.jpeg')):
+                # For image content
                 image_label = QLabel()
+                pixmap = QPixmap(content_path)
+                image_label.setPixmap(pixmap)
                 image_label.setAlignment(Qt.AlignCenter)
-                self.content_layout.addWidget(image_label)
-                self.image_labels.append(image_label)
-
-        # Load new images into the labels
-        for i, image_path in enumerate(self.image_paths):
-            pixmap = QPixmap(image_path)
-            self.image_labels[i].setPixmap(pixmap)
-
-        # Move the chapter buttons to the end
-        self.content_layout.removeWidget(self.buttons_widget)
+                self.content_widgets.append(image_label)
+                
+            elif content_path.endswith('.txt'):
+                # For text content
+                with open(content_path, 'r') as file:
+                    text = file.read()
+                text_widget = QLabel(text)
+                text_widget.setAlignment(Qt.AlignCenter)
+                text_widget.setWordWrap(True)
+                self.content_widgets.append(text_widget)
+                
+            elif content_path.endswith('.mp4'):
+                # For video content
+                video_player = QMediaPlayer(self)
+                video_widget = QVideoWidget(self)
+                video_player.setVideoOutput(video_widget)
+                video_player.setMedia(QUrl.fromLocalFile(content_path))
+                video_player.play()
+                self.content_widgets.append(video_widget)
+                
+            elif content_path.startswith('http'):
+                # For web content
+                web_view = QWebEngineView()
+                web_view.load(QUrl(content_path))
+                self.content_widgets.append(web_view)
+                
+            else:
+                # Handle other content types as needed
+                pass
+            
+            self.content_layout.addWidget(self.content_widgets[-1])
+            #print(f"Added widget {self.content_widgets[-1]}") # Debug
+        
         self.content_layout.addWidget(self.buttons_widget)
-
-        self.update_images()
-        self.repaint()
-        print("Images reloaded")
+        if hasattr(self, "content_widgets") and self.content_widgets != None: self.update_content()
         
     def next_chapter(self):
         self.threading = True
@@ -1216,7 +1224,7 @@ class ManhwaViewer(QMainWindow):
         self.threading = False
 
         if self.task_successful:
-            self.setWindowTitle(f'MV 1.2 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
+            self.setWindowTitle(f'MV 1.5 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
             self.settings.set_chapter(self.prov.get_chapter())
             if self.settings.get_auto_export() and self.settings.get_provider() == "auto": self.export_chapter()
             self.task_successful = False
@@ -1230,7 +1238,7 @@ class ManhwaViewer(QMainWindow):
         self.chapter_selector.setText(str(self.settings.get_chapter()))
         print("Reloading images...")
         self.scroll_area.verticalScrollBar().setValue(0) # Reset the scrollbar position to the top
-        self.reload_images()
+        self.reload_content()
         
     def previous_chapter(self):
         self.threading = True
@@ -1241,7 +1249,7 @@ class ManhwaViewer(QMainWindow):
         self.threading = False
 
         if self.task_successful:
-            self.setWindowTitle(f'MV 1.2 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
+            self.setWindowTitle(f'MV 1.5 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
             self.settings.set_chapter(self.prov.get_chapter())
             if self.settings.get_auto_export() and self.settings.get_provider() == "auto": self.export_chapter()
             self.task_successful = False
@@ -1255,7 +1263,7 @@ class ManhwaViewer(QMainWindow):
         self.chapter_selector.setText(str(self.settings.get_chapter()))
         print("Reloading images...")
         self.scroll_area.verticalScrollBar().setValue(0) # Reset the scrollbar position to the top
-        self.reload_images()
+        self.reload_content()
         
     def reload_chapter(self):
         self.threading = True
@@ -1266,7 +1274,7 @@ class ManhwaViewer(QMainWindow):
         self.threading = False
 
         if self.task_successful:
-            self.setWindowTitle(f'MV 1.2 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
+            self.setWindowTitle(f'MV 1.5 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
             self.settings.set_chapter(self.prov.get_chapter())
             if self.settings.get_auto_export() and self.settings.get_provider() == "auto": self.export_chapter() # Keep?
             self.task_successful = False
@@ -1280,14 +1288,16 @@ class ManhwaViewer(QMainWindow):
         self.chapter_selector.setText(str(self.settings.get_chapter()))
         print("Reloading images...")
         self.scroll_area.verticalScrollBar().setValue(0) # Reset the scrollbar position to the top
-        self.reload_images()
+        self.reload_content()
 
     def timer_tick(self):
-        if not self.threading: self.update_images()
+        if not self.threading: self.update_content()
         #print("Update tick") # Debug
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    print(QStyleFactory.keys())
+    app.setStyle("Fusion")
     viewer = ManhwaViewer()
     viewer.show()
     sys.exit(app.exec_())
