@@ -4,15 +4,15 @@ import requests
 from bs4 import BeautifulSoup
 import os
 import re
-from aplustools.web.webtools import Search
+from aplustools.web.search import Search
 import json
 
 
 class AutoProviderPluginAsuraToon(AutoProviderPlugin):
-    def __init__(self, title, chapter, chapter_rate, data_folder, cache_folder, provider):
+    def __init__(self, title, chapter, chapter_rate, data_folder, cache_folder, provider, num_workers=10):
         super().__init__(title=title, chapter=chapter, chapter_rate=chapter_rate, data_folder=data_folder,
-                         cache_folder=cache_folder, provider=provider,
-                         specific_provider_website="asuratoon.com", logo_path="./data/AsuraToonLogo.png")
+                         cache_folder=cache_folder, provider=provider, specific_provider_website="asuratoon.com",
+                         logo_path="./data/AsuraToonLogo.png", num_workers=num_workers)
         if not os.path.isfile(os.path.join(data_folder, "AsuraToonLogo.png")):
             try:
                 # Using base64 is better as it won't matter if the url is ever changed, otherwise pass the url and

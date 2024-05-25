@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "ManhwaViewer"
-#define MyAppVersion "1.6.4.1"
+#define MyAppVersion "1.6.5"
 #define MyAppPublisher "Cariel Becker"
 #define MyAppURL "https://www.cariel-becker.com/"
 #define MyAppExeName "manhwaviewer.exe"
@@ -10,12 +10,11 @@
 #define MyAppAssocExt ".mwa1"
 #define MyAppAssocKey StringChange(MyAppAssocName, " ", "") + MyAppAssocExt
 #define MyAppDir ".\output\manhwaviewer\"
-#define MyAppId "954F3A85-E04F-4466-93AE-7BCA1EA71E06"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
-AppId={#MyAppId}
+AppId={{577A1BA9-5E47-4574-AEE8-495133C450AD}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -23,19 +22,19 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\{#MyAppName}{#MyAppVersion}
+DefaultDirName={autopf}\{#MyAppName}
 ChangesAssociations=yes
 DisableProgramGroupPage=yes
 ;InfoBeforeFile=Hello
 ;InfoAfterFile=Bye
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
-PrivilegesRequired=lowest
-;PrivilegesRequiredOverridesAllowed=dialog
+;PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=.\
-OutputBaseFilename=manhwaviewer-v1.6.4.1-win10-11-x64-installer
+OutputBaseFilename=manhwaviewer-v1.6.5-win10-11-x64-encry-installer
 SetupIconFile=./data/Untitled-1.ico
-;Password=88ef5ac2-477c-41c2-afb5-5689a3ae98a5
-;Encryption=yes
+Password=88ef5ac2-477c-41c2-afb5-5689a3ae98a5
+Encryption=yes
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -89,3 +88,4 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+

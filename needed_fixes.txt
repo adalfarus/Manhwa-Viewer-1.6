@@ -1,23 +1,12 @@
-- chapter selector not reverting back, when chapter is invalid # Fixed
--> Don't save all changes to db, only those that worked (let chapter methods handle it)
--> Maybe do same for title (better not, titles are unlikely to have same problem as chapters)
-- fix overlaying of images on to side menu, when reloading (next chapter, etc.) # Fixed
--> Repaint
-- popups for events (like failed to load [next] chapter) # Fixed
-- better handeling of chapter loading times # Fixed
-- title and chapter shown as name next to manhwaviewer # Fixed shown next to MV to make shorter and more readable
-- Make CustomProgressDialog look better and more customizable # Fixed
+
 - scrollbar doesnt work with touch screen
 - touch screen input way to sensitive
 - progress dialog doesn't show over the stay on top flagged qmainapplication
 
 - touch screen input with more than one finger needed (maybe gestures like zooming, but lower priority right now)
-- flickering of image edges, when scrolling or in right vertical position
-- better compilation results with pyinstaller and nuitka
-- add indirect and direct mode (indirect, what direct is at the moment, direct use the href from website
-to go to next chapter, etc. --> direct would require a start manga url [could potentially also extract it from chapter url])
+- flickering of image edges, when scrolling or in right vertical position ( Maybe overlay images one pixel or so? )
 - better speed for loading chapters
--> preloading of the previous and the next chapter
+-> preloading of the previous and the next chapter?
 - better exporting of chapters
 - adding support for text only and video (plugins)
 - add support for anime and comic compilation videos

@@ -1,11 +1,10 @@
-from aplustools.utils.imagetools import OnlineImage, OfflineImage
+from aplustools.data.imagetools import OnlineImage, OfflineImage
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from aplustools.web.webtools import Search, get_useragent
+from aplustools.web.search import Search
 from urllib.parse import urljoin, urlparse
 from typing import Optional, Union, List
 from requests.sessions import Session
 from abc import ABC, abstractmethod
-from multiprocessing import Pool
 from bs4 import BeautifulSoup
 from queue import Queue
 from PIL import Image
@@ -17,6 +16,12 @@ import time
 import re
 import os
 
+from aplustools.package.timid import TimidTimer
+
+import aiohttp
+import asyncio
+import aiofiles
+
 convert_image_format = OnlineImage.convert_image_format
 
 # Disable only the specific InsecureRequestWarning
@@ -25,7 +30,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class AutoProviderPlugin(ABC):
     def __init__(self, title: str, chapter: int, chapter_rate: float, data_folder: str, cache_folder: str,
-                 provider: str, specific_provider_website: str, logo_path: str):
+                 provider: str, specific_provider_website: str, logo_path: str, num_workers: int = 10):
         self.title = title
         self.url_title = self.urlify(title)
         self.chapter = None
@@ -34,7 +39,7 @@ class AutoProviderPlugin(ABC):
         self.chapter_rate = chapter_rate
         self.data_folder = data_folder
         self.cache_folder = cache_folder
-        self.provider = provider
+        self.provider_type = provider
         self.specific_provider_website = specific_provider_website
         self.logo_path = logo_path
         self.blacklisted_websites = [
@@ -51,6 +56,8 @@ class AutoProviderPlugin(ABC):
         self.download_progress_queue = Queue()
         self.process_progress_queue = Queue()
         self.session = Session()  # Create a session for connection pooling
+        self.clipping_space = None
+        self.num_workers = num_workers
 
     @staticmethod
     def urlify(to_url: str):
@@ -83,11 +90,11 @@ class AutoProviderPlugin(ABC):
     def get_chapter_rate(self):
         return self.chapter_rate
 
-    def set_provider(self, new_provider):
-        self.provider = new_provider
+    def set_provider_type(self, new_provider):
+        self.provider_type = new_provider
 
-    def get_provider(self):
-        return self.provider
+    def get_provider_type(self):
+        return self.provider_type
 
     def set_current_url(self, new_current_url):
         self.current_url = new_current_url
@@ -161,8 +168,8 @@ class AutoProviderPlugin(ABC):
 
     def redo_prep(self):
         self._empty_cache()
-        image = Image.open(f"{self.data_folder}empty.png")
-        image.save(f"{self.cache_folder}empty.png")
+        image = Image.open(f"{self.data_folder}/empty.png")
+        image.save(f"{self.cache_folder}/empty.png")
 
     def update_current_url(self):
         print("Updating current URL...")
@@ -181,12 +188,12 @@ class AutoProviderPlugin(ABC):
             "bing": self._bing_provider,
             "indirect": self._indirect_provider,
             "direct": self._direct_provider
-        }.get(self.provider.lower())
+        }.get(self.provider_type.lower())
 
         if provider_function:
             return provider_function()
         else:
-            print(f"Provider {self.provider} not supported.")
+            print(f"Provider {self.provider_type} not supported.")
             return None
 
     @classmethod
@@ -297,21 +304,73 @@ class AutoProviderPlugin(ABC):
     def _empty_cache(self):
         files = os.listdir(self.cache_folder)
         for f in files:
-            os.remove(f"{self.cache_folder}{f}")
+            os.remove(f"{self.cache_folder}/{f}")
 
-    def _download_image(self, img_tag):
-        image = OnlineImage(urljoin(self.current_url, img_tag['src']))
-        success, name, path = image.download_image(self.cache_folder)
-        if success:
-            return name
+    async def _download_image_async(self, session, img_tag, new_name, download_progress_queue):
+        timer = TimidTimer()
+        url = urljoin(self.current_url, img_tag['src'])
+        async with session.get(url) as response:
+            if response.status == 200:
+                content = await response.read()
+                file_extension = img_tag['src'].split(".")[-1]
+                file_name = f"{new_name}.{file_extension}"
+                file_path = os.path.join(self.cache_folder, file_name)
+                async with aiofiles.open(file_path, 'wb') as f:
+                    await f.write(content)
+                print(timer.end(), "IMGTI")
+                return file_name
         return img_tag['src'].split("/")[-1]
 
+    async def download_images_async(self, validated_tags, download_progress_queue):
+        total_images = len(validated_tags)
+        count = 0
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for img_tag in validated_tags:
+                new_image_name = f"{str(count).zfill(3)}"
+                task = asyncio.create_task(
+                    self._download_image_async(session, img_tag, new_image_name, download_progress_queue))
+                tasks.append(task)
+                count += 1
+
+            results = await asyncio.gather(*tasks)
+            print(f"{len(validated_tags)} images downloaded!")
+            return results
+
     def download_images(self):
+        try:
+            response = requests.get(self.current_url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            img_tags = soup.find_all('img')
+
+            validated_tags = [img_tag for img_tag in img_tags if self.validate_image(img_tag['src'].split("/")[-1])[-1]]
+
+            self.total_images = len(validated_tags)
+
+            download_progress_queue = Queue()
+            download_result = asyncio.run(self.download_images_async(validated_tags, download_progress_queue))
+
+            # Processing results
+            count = 0
+            for image_name in download_result:
+                count += 1
+                progress = int((count / self.total_images) * 100)
+                download_progress_queue.put(progress)
+
+            return True
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return False
+
+    def download_imagess(self):
         try:
             response = self.session.get(self.current_url)  # Use the session for connection pooling
             response.raise_for_status()
             soup = BeautifulSoup(response.text, 'html.parser')
             img_tags = soup.find_all('img')
+
             validated_tags = []
 
             for img_tag in img_tags:
@@ -322,119 +381,68 @@ class AutoProviderPlugin(ABC):
 
             count = 0
             # Concurrent downloading of images
-            with ThreadPoolExecutor(max_workers=10) as executor:
+            with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
                 # Start the load operations and mark each future with its URL
-                future_to_img = {executor.submit(self._download_image, img_tag): img_tag for img_tag in validated_tags}
+                for img_tag in validated_tags:
+                    new_image_name = f"{str(count).zfill(3)}"
+                    future_to_img = {executor.submit(self._download_image, img_tag, new_image_name): img_tag}
+                    count += 1
 
                 for future in as_completed(future_to_img):
                     img_tag = future_to_img[future]
                     try:
                         image_name = future.result()  # This retrieves the result of the function (or raises the exception it threw)
                         count += 1
-                        progress = int((count) / self.total_images * 100)
+                        progress = int((count / self.total_images) * 100)
                         # print(f"Putting progress value of {progress} from download_images at iteration {i}") # Debug
                         self.download_progress_queue.put(progress)
                         # print("Put", image_name, "into queue.") # Debug
-                        self.image_queue.put(image_name)
+                        # Rename and enqueue the image
+                          # Rename to sequential format
+                        # self.image_queue.put((image_name, new_image_name))
                         # print(f"Downloaded image: {image_name}")
                     except Exception as exc:
                         print(f"{img_tag} generated an exception: {exc}")
-            self.image_queue.put(True)
+            # self.image_queue.put(True)
             print(f"{len(validated_tags)} images downloaded!")
         except Exception as e:
             print(f"An error occurred: {e}")
-            self.image_queue.put(True)
+            # self.image_queue.put(True)
             return False
         return True
 
     def validate_image(self, image):
+        timer = TimidTimer()
         file_name, file_extension, *_ = image.rsplit(".", maxsplit=1) + ["", ""]
         new_name = file_name.zfill(3)
-        if image.split('.')[0].isdigit():
+        if file_name.isdigit():
+            print(timer.end(), "VALT")
             return file_name, file_extension, new_name, True
+        print(timer.end(), "VALF")
         return file_name, file_extension, new_name, False
 
-    def process_images(self):
-        count = 0
-        async_results = []
-
-        def callback(*result, renamed: bool = True):
-            nonlocal count
-            print(f'Renamed a file.' if renamed else "Processed a file")
-            count += 1
-            progress = int((count) / self.total_images * 100)
-            # print(f"Putting progress value of {progress} from process_images at count {count}") # Debug
-            self.process_progress_queue.put(progress)
-
-        try:
-            with Pool(processes=1) as pool:
-                while True:
-                    if not self.image_queue.empty():
-                        image = self.image_queue.get()
-                        if image == True: break
-                        # print("Got", image, "from queue.") # Debug
-                        count += 1
-                        file_name, file_extension, new_name, validated = self.validate_image(image)
-                        # if not validated:
-                        #     # print("Didn't validate", image) # Debug
-                        #     file_path = os.path.join(self.cache_folder, file_name + ("." + file_extension if
-                        #                                                              file_extension else ""))
-                        #     print("Removing", file_path)
-                        #     try:
-                        #         os.remove(file_path)
-                        #     except Exception as e:
-                        #         print(f"An error occurred {e} while removing a file.")
-                        #     continue
-                        # else: print("Validated", image) # Debug
-
-                        # Call apply_async and append the result to our results list
-                        if file_extension not in ["png", "jpg", "jpeg", "webp"]:
-                            args = ('', self.cache_folder, file_name, file_extension, new_name, "png")
-                            async_result = pool.apply_async(convert_image_format, args, callback=callback)
-                            async_results.append(async_result)
-                        else:
-                            callback(renamed=False)
-
-                # Wait for all asynchronous results to complete
-                for async_result in async_results:
-                    async_result.get()
-
-            return True
-        except Exception as e:
-            print(f"Error occurred: {e}")
-            return False
-
     def cache_current_chapter(self):
+        timer = TimidTimer()
         if not self.current_url:
             print("URL nor found.")
             yield 0
             return False
-        if not self.is_crawlable("*", self.current_url):
-            print("URL not crawlable as per robots.txt.")
-            yield 0
-            return False
-        if not os.path.exists(self.cache_folder):
-            os.makedirs(self.cache_folder)
         self._empty_cache()
 
+        timer2 = TimidTimer()
         download_result_queue = Queue()
-        process_result_queue = Queue()
         download_thread = threading.Thread(target=lambda q=download_result_queue: q.put(self.download_images()))
-        process_thread = threading.Thread(target=lambda q=process_result_queue: q.put(self.process_images()))
         download_thread.start()
-        process_thread.start()
+        print(timer2.end(), "STRTUP")
 
         current_download_progress = 0
-        current_process_progress = 0
         combined_progress = 0
 
         yield 0
 
         while True:
-            if not download_thread.is_alive() and not process_thread.is_alive() and (
-                    self.download_progress_queue.empty() and self.process_progress_queue.empty()):
+            if not download_thread.is_alive() and self.download_progress_queue.empty():
                 break
-            # print("Download Thread alive: " + str(download_thread.is_alive()), "Process Thread alive: " + str(process_thread.is_alive())) # Debug
 
             # Handle download progress
             if not self.download_progress_queue.empty():
@@ -443,31 +451,24 @@ class AutoProviderPlugin(ABC):
                 combined_progress += progress_diff
                 current_download_progress = new_download_progress
 
-            # Handle process progress
-            if not self.process_progress_queue.empty():
-                new_process_progress = self.process_progress_queue.get()
-                progress_diff = new_process_progress - current_process_progress
-                combined_progress += progress_diff
-                current_process_progress = new_process_progress
-
             yield combined_progress // 2
             time.sleep(0.1)
 
         download_result = download_result_queue.get()
-        process_result = process_result_queue.get()
+        print("DOWNLOAD RESULT", download_result)
 
         print("Cache current chapter done, returning now")
-        print("Download Thread alive: " + str(download_thread.is_alive()),
-              "Provess Thread alive: " + str(process_thread.is_alive()))
-        return download_result and process_result
+        print("Download Thread alive: " + str(download_thread.is_alive()))
+        print(timer.end(), "FULL")
+        return download_result
 
 
 class AutoProviderBaseLike(AutoProviderPlugin):
     def __init__(self, title, chapter, chapter_rate, data_folder, cache_folder, provider, specific_provider_website,
-                 logo_path, logo_url_or_data, logo_img_format, logo_img_type):
+                 logo_path, logo_url_or_data, logo_img_format, logo_img_type, num_workers: int = 10):
         super().__init__(title=title, chapter=chapter, chapter_rate=chapter_rate, data_folder=data_folder,
                          cache_folder=cache_folder, provider=provider,
-                         specific_provider_website=specific_provider_website, logo_path=logo_path)
+                         specific_provider_website=specific_provider_website, logo_path=logo_path, num_workers=num_workers)
         if not os.path.isfile(os.path.join(data_folder, logo_path.split("/")[-1])):
             try:
                 # Using base64 is better as it won't matter if the url is ever changed, otherwise pass the url and
@@ -478,7 +479,7 @@ class AutoProviderBaseLike(AutoProviderPlugin):
                 print(f"An error occurred {e}")
                 return
 
-    def _search(self, text: Optional[str] = None):
+    def _search_post(self, text):
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0',
             'Accept': 'application/json, text/javascript, */*; q=0.01',
@@ -494,7 +495,7 @@ class AutoProviderBaseLike(AutoProviderPlugin):
         # Define the data for the first POST request
         data = {
             'action': 'wp-manga-search-manga',
-            'title': text or self.title
+            'title': text
         }
 
         # Send the first POST request
@@ -508,6 +509,36 @@ class AutoProviderBaseLike(AutoProviderPlugin):
         else:
             print(f'Error: {response.status_code}')
         return None
+
+    def _search_web(self, text):
+        base_url = self.specific_provider_website
+        search_url = f"https://{base_url}?s={text}&post_type=wp-manga"
+
+        response = requests.get(search_url)
+        response.raise_for_status()
+
+        soup = BeautifulSoup(response.content, 'html.parser')
+        c_tabs_item_divs = soup.find_all('div', class_='c-tabs-item')  # There is only ever one of these
+
+        # Dictionary to hold titles and urls
+        titles_urls = []
+
+        # Iterate through each div to extract titles and urls
+        for div in c_tabs_item_divs:
+            for row_c_tabs in div.find_all('div', class_='row c-tabs-item__content'):
+                a_tag = row_c_tabs.find('a')
+                if a_tag and 'href' in a_tag.attrs and 'title' in a_tag.attrs:
+                    titles_urls.append({"title": a_tag['title'], "url": a_tag['href']})
+
+        return {"data": titles_urls}
+
+    def _search(self, text: Optional[str] = None):
+        text = text or self.title
+
+        search_results = self._search_web(text)
+        if not search_results["data"]:
+            search_results = self._search_post(text)
+        return search_results
 
     def _direct_provider(self):
         response_data = self._search()
@@ -539,10 +570,10 @@ class AutoProviderBaseLike(AutoProviderPlugin):
 
 class AutoProviderBaseLike2(AutoProviderBaseLike):
     def __init__(self, title, chapter, chapter_rate, data_folder, cache_folder, provider, specific_provider_website,
-                 logo_path, logo_url_or_data, logo_img_format, logo_img_type):
+                 logo_path, logo_url_or_data, logo_img_format, logo_img_type, num_workers: int = 10):
         super().__init__(title=title, chapter=chapter, chapter_rate=chapter_rate, data_folder=data_folder,
                          cache_folder=cache_folder, provider=provider,
-                         specific_provider_website=specific_provider_website, logo_path=logo_path)
+                         specific_provider_website=specific_provider_website, logo_path=logo_path, num_workers=num_workers)
         if not os.path.isfile(os.path.join(data_folder, logo_path.split("/")[-1])):
             try:
                 # Using base64 is better as it won't matter if the url is ever changed, otherwise pass the url and

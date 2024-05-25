@@ -1,12 +1,21 @@
-# ManhwaViewer 1.6.3-dev
+# ManhwaViewer 1.6-dev
 
-If you want to use ManhwaViewer v1.6.3, just download the latest release [here](https://github.com/adalfarus/Manhwa-Viewer-1.6.2/releases).
+If you want to use ManhwaViewer v1.6.x, just download the latest release [here](https://github.com/adalfarus/Manhwa-Viewer-1.6/releases/latest).
 
-<p float="left">
+<p float="center">
   <img src="/repo_images/repo_image_1.png" width="41%" />
   <img src="/repo_images/repo_image_4.png" width="48%" />
 </p>
 
+MV 1.6.5 Preview (Both windows are the same size)
+<p float="center">
+    <img src="/repo_images/repo_image_8.png" width="100%" />
+</p>
+<p float="center">
+    <img src="/repo_images/repo_image_9.png" width="100%" />
+</p>
+
+(Everything below this point is accurate for MV 1.6.2)
 ## For Users
 
 ### Basics:
@@ -122,13 +131,23 @@ To compatabilty:
 - Windows Vista and lower are untested
 - Windows 10-1703 has a different dark mode reg key (you need to set the environment variable to change themes).
 - All other Windows versions should work without problems.
+- Linux and Mac would need more modification but are also okay, just that I wouldn't be able to easily test them.
 
 ## For Programmers
 
 ### Bugs
-There is a small bug, where the title doesn't update internally and you need to restart the program. There also is a bug where the task window keeps popping up if the task failed and you close it too quickly, so either wait a bit before clicking the close button or stop the app with the task manager and start it again.
+#### The title doesn't update internally and you need to restart the program.
+##### Affected versions: 1.6.2 & 1.6.3
+##### Fix:
+- ~~Open the file {install_location}/_internal/modules/AutoProviderPlugin.py~~
+- ~~Go to `line 68` or to the function `set_title`~~
+- ~~Add the line **self.url_title = self.urlify(new_title)**~~
+- None
 
-### Compatibility
-- Windows 10-1703 has a different dark mode reg key (you need to set the environment variable to change themes).
-- All other Windows versions should work without problems.
-Linux and Mac would need more modification but are also okay, just that I wouldn't be able to easily test them.
+#### The task window keeps popping up if the task failed and you close it too quickly.
+##### Affected versions: 1.6.2 & 1.6.3
+##### Fix (1.6.3):
+- ~~Open the file {install_location}/_internal/modules/Classes.py~~
+- ~~Go to to the function `updateProgress`~~
+- ~~Change the line **while self.current_value == 0 and self.value() < 10:** to **if self.current_value == 0 and self.value() < 10:**~~
+- None

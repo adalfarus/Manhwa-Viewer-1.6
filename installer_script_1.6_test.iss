@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "ManhwaViewer"
-#define MyAppVersion "1.6.4.1"
+#define MyAppVersion "1.6.4"
 #define MyAppPublisher "Cariel Becker"
 #define MyAppURL "https://www.cariel-becker.com/"
 #define MyAppExeName "manhwaviewer.exe"
@@ -10,7 +10,7 @@
 #define MyAppAssocExt ".mwa1"
 #define MyAppAssocKey StringChange(MyAppAssocName, " ", "") + MyAppAssocExt
 #define MyAppDir ".\output\manhwaviewer\"
-#define MyAppId "954F3A85-E04F-4466-93AE-7BCA1EA71E06"
+#define MyAppId "577A1BA9-5E47-4574-AEE8-495133C450AD"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
@@ -23,19 +23,19 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={autopf}\{#MyAppName}{#MyAppVersion}
+DefaultDirName={autopf}\{#MyAppName}
 ChangesAssociations=yes
 DisableProgramGroupPage=yes
 ;InfoBeforeFile=Hello
 ;InfoAfterFile=Bye
 ; Uncomment the following line to run in non administrative install mode (install for current user only.)
-PrivilegesRequired=lowest
-;PrivilegesRequiredOverridesAllowed=dialog
+;PrivilegesRequired=lowest
+PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=.\
-OutputBaseFilename=manhwaviewer-v1.6.4.1-win10-11-x64-encry-installer
+OutputBaseFilename=manhwaviewer-v1.6.4-win10-11-x64-installer
 SetupIconFile=./data/Untitled-1.ico
-Password=88ef5ac2-477c-41c2-afb5-5689a3ae98a5
-Encryption=yes
+;Password=88ef5ac2-477c-41c2-afb5-5689a3ae98a5
+;Encryption=yes
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -89,3 +89,97 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+; Delete specific file types within _internal directory but preserve config.py
+Type: files; Name: "{app}\_internal\*.*"
+//; Excludes: "config.py", {app}\_internal\cache\*.*, {app}\_internal\data\*.*, {app}\_internal\libs\*.*, {app}\_internal\extensions\*.*"
+
+; Manually specify each directory from which to delete files, excluding config.py and entire subdirectories you want to keep
+Type: files; Name: "{app}\_internal\certifi\*.*"
+Type: files; Name: "{app}\_internal\charset_normalizer\*.*"
+Type: files; Name: "{app}\_internal\lxml\*.*"
+Type: files; Name: "{app}\_internal\modules\*.*"
+Type: files; Name: "{app}\_internal\PIL\*.*"
+Type: files; Name: "{app}\_internal\PySide6\*.*"
+Type: files; Name: "{app}\_internal\shiboken6\*.*"
+Type: files; Name: "{app}\_internal\stdlib_list\*.*"
+
+; Delete any empty directories within the _internal directory
+Type: dirifempty; Name: "{app}\_internal\*"
+
+; Delete the main executable
+Type: files; Name: "{app}\manhwaviewer.exe"
+
+
+[Code]
+var
+  TempDir: String;
+  OldAppDir: String; // This will store the old installation path
+
+function InitializeSetup(): Boolean;
+var
+  UninstallString: String;
+  ResultCode: Integer;
+begin
+  Result := True;
+  TempDir := ExpandConstant('{tmp}\ManhwaViewerBackup');
+
+  // Attempt to get the old installation directory from the registry
+  if not RegQueryStringValue(HKEY_LOCAL_MACHINE, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppID}', 'InstallLocation', OldAppDir) then
+    if not RegQueryStringValue(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#MyAppID}', 'InstallLocation', OldAppDir) then
+      OldAppDir := ''; // Fallback if no registry entry is found
+
+  if OldAppDir <> '' then
+  begin
+    // Create temporary directory
+    if not DirExists(TempDir) then
+      CreateDir(TempDir);
+
+    // Backup the SQLite DLL and data, excluding the database file
+    FileCopy(OldAppDir + '\_internal\sqlite3.dll', TempDir + '\sqlite3.dll', False);
+    FileCopy(OldAppDir + '\data\*.*', TempDir + '\data\', True);
+    DeleteFile(TempDir + '\data\data.db');
+    FileCopy(OldAppDir + '\cache\*.*', TempDir + '\cache\', True);
+
+    // Check for uninstall string in both per-user and per-machine locations
+    if not RegQueryStringValue(HKEY_CURRENT_USER, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#MyAppID}}', 'UninstallString', UninstallString) then
+      if not RegQueryStringValue(HKEY_LOCAL_MACHINE, 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{{#MyAppID}}', 'UninstallString', UninstallString) then
+        UninstallString := '';
+
+    if UninstallString <> '' then
+    begin
+      if Exec(ExpandConstant(UninstallString), '', '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then
+      begin
+        // Uninstall was successful
+      end
+      else
+      begin
+        MsgBox('Failed to execute the uninstaller.', mbError, MB_OK);
+        Result := False;
+        Exit;
+      end;
+    end;
+  end
+  else
+  begin
+    // Handle case where the old directory cannot be found
+    MsgBox('Old installation not found. Continuing installation.', mbInformation, MB_OK);
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  NewAppDir: String;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    NewAppDir := ExpandConstant('{app}');
+
+    // Restore data and cache
+    FileCopy(TempDir + '\data\*', NewAppDir + '\data\', True);
+    FileCopy(TempDir + '\cache\*', NewAppDir + '\cache\', True);
+
+    // Additional logic for database migration goes here
+  end;
+end;

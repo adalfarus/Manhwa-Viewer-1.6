@@ -7,7 +7,7 @@
   },
   {
    "optionDest": "filenames",
-   "value": "./manhwaviewer.py"
+   "value": "./NMV.py"
   },
   {
    "optionDest": "onefile",
@@ -67,7 +67,7 @@
   },
   {
    "optionDest": "datas",
-   "value": "./modules;modules/"
+   "value": "./moduless;modules/"
   }
  ],
  "nonPyinstallerOptions": {
