@@ -5,6 +5,7 @@ from urllib.parse import urljoin, urlparse
 from typing import Optional, Union, List
 from requests.sessions import Session
 from abc import ABC, abstractmethod
+from multiprocessing import Pool
 from bs4 import BeautifulSoup
 from queue import Queue
 from PIL import Image
@@ -306,7 +307,7 @@ class AutoProviderPlugin(ABC):
         for f in files:
             os.remove(f"{self.cache_folder}/{f}")
 
-    async def _download_image_async(self, session, img_tag, new_name, download_progress_queue):
+    async def _download_image_async(self, session, img_tag, new_name):
         timer = TimidTimer()
         url = urljoin(self.current_url, img_tag['src'])
         async with session.get(url) as response:
@@ -318,10 +319,13 @@ class AutoProviderPlugin(ABC):
                 async with aiofiles.open(file_path, 'wb') as f:
                     await f.write(content)
                 print(timer.end(), "IMGTI")
+                self.downloaded_images_count += 1
+                progress = int((self.downloaded_images_count / self.total_images) * 100)
+                self.download_progress_queue.put(progress)
                 return file_name
         return img_tag['src'].split("/")[-1]
 
-    async def download_images_async(self, validated_tags, download_progress_queue):
+    async def download_images_async(self, validated_tags):
         total_images = len(validated_tags)
         count = 0
         async with aiohttp.ClientSession() as session:
@@ -329,7 +333,7 @@ class AutoProviderPlugin(ABC):
             for img_tag in validated_tags:
                 new_image_name = f"{str(count).zfill(3)}"
                 task = asyncio.create_task(
-                    self._download_image_async(session, img_tag, new_image_name, download_progress_queue))
+                    self._download_image_async(session, img_tag, new_image_name))
                 tasks.append(task)
                 count += 1
 
@@ -348,68 +352,14 @@ class AutoProviderPlugin(ABC):
 
             self.total_images = len(validated_tags)
 
-            download_progress_queue = Queue()
-            download_result = asyncio.run(self.download_images_async(validated_tags, download_progress_queue))
-
-            # Processing results
-            count = 0
-            for image_name in download_result:
-                count += 1
-                progress = int((count / self.total_images) * 100)
-                download_progress_queue.put(progress)
+            self.downloaded_images_count = 0
+            download_result = asyncio.run(self.download_images_async(validated_tags))
 
             return True
 
         except Exception as e:
             print(f"An error occurred: {e}")
             return False
-
-    def download_imagess(self):
-        try:
-            response = self.session.get(self.current_url)  # Use the session for connection pooling
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
-            img_tags = soup.find_all('img')
-
-            validated_tags = []
-
-            for img_tag in img_tags:
-                if self.validate_image(img_tag['src'].split("/")[-1])[-1]:
-                    validated_tags.append(img_tag)
-
-            self.total_images = len(validated_tags)
-
-            count = 0
-            # Concurrent downloading of images
-            with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
-                # Start the load operations and mark each future with its URL
-                for img_tag in validated_tags:
-                    new_image_name = f"{str(count).zfill(3)}"
-                    future_to_img = {executor.submit(self._download_image, img_tag, new_image_name): img_tag}
-                    count += 1
-
-                for future in as_completed(future_to_img):
-                    img_tag = future_to_img[future]
-                    try:
-                        image_name = future.result()  # This retrieves the result of the function (or raises the exception it threw)
-                        count += 1
-                        progress = int((count / self.total_images) * 100)
-                        # print(f"Putting progress value of {progress} from download_images at iteration {i}") # Debug
-                        self.download_progress_queue.put(progress)
-                        # print("Put", image_name, "into queue.") # Debug
-                        # Rename and enqueue the image
-                          # Rename to sequential format
-                        # self.image_queue.put((image_name, new_image_name))
-                        # print(f"Downloaded image: {image_name}")
-                    except Exception as exc:
-                        print(f"{img_tag} generated an exception: {exc}")
-            # self.image_queue.put(True)
-            print(f"{len(validated_tags)} images downloaded!")
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            # self.image_queue.put(True)
-            return False
-        return True
 
     def validate_image(self, image):
         timer = TimidTimer()

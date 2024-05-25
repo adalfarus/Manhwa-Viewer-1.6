@@ -13,6 +13,7 @@ from modules.AutoProviderPlugin import AutoProviderPlugin, AutoProviderBaseLike,
 from modules.Classes import (CustomProgressDialog, ImageLabel, SearchWidget, AdvancedQMessageBox,
                              CustomComboBox, Settings, QAdvancedSmoothScrollingArea, AutoProviderManager,
                              AdvancedSettingsDialog)
+from modules.themes import Themes
 
 # Apt stuff ( update to newer version )
 from aplustools.io.loggers import monitor_stdout
@@ -33,7 +34,6 @@ import os
 
 import multiprocessing
 import stdlib_list
-
 multiprocessing.freeze_support()
 hiddenimports = list(stdlib_list.stdlib_list())
 
@@ -61,9 +61,7 @@ class MainWindow(QMainWindow):
         db_path = f"{self.data_folder}/data.db"
 
         if int(self.system.get_major_os_version()) <= 10:
-            self.settings = Settings(db_path, {"geometry": "100, 100, 800, 630",
-                                               "advanced_settings": '{"recent_titles": [], "themes": {"light": "light", "dark": "dark", "font": "Segoe UI"}, "settings_file_path": "", "settings_file_mode": "overwrite", "misc": {"auto_export": false, "num_workers": 10}}', },
-                                     self.export_settings)
+            self.settings = Settings(db_path, {"geometry": "100, 100, 800, 630", "advanced_settings": '{"recent_titles": [], "themes": {"light": "light", "dark": "dark", "font": "Segoe UI"}, "settings_file_path": "", "settings_file_mode": "overwrite", "misc": {"auto_export": false, "num_workers": 10}}',}, self.export_settings)
         else:
             self.settings = Settings(db_path, {"geometry": "100, 100, 800, 630"}, self.export_settings)
         # self.settings.set_geometry([100, 100, 800, 630])
@@ -93,6 +91,8 @@ class MainWindow(QMainWindow):
         self.threading = False
 
         self.reload_gui()
+        self.downscaling = self.downscale_checkbox.isChecked()
+        self.upscaling = self.upscale_checkbox.isChecked()
 
         if not self.hover_effect_all_checkbox.isChecked():
             self.reload_hover_effect_all_setting()
@@ -478,8 +478,8 @@ class MainWindow(QMainWindow):
         settings = self.settings.get_advanced_settings()
         default_settings = json.loads(self.settings.get_default_setting("advanced_settings"))
         self.settings.close()
-        dialog = AdvancedSettingsDialog(parent=self, current_settings=settings, default_settings=default_settings,
-                                        master=self)
+        available_themes = tuple(key for key in Themes.__dict__.keys() if not (key.startswith("__") or key.endswith("__")))
+        dialog = AdvancedSettingsDialog(parent=self, current_settings=settings, default_settings=default_settings, master=self, available_themes=available_themes)
         dialog.exec()
         if not self.settings.is_open:
             self.settings.connect()
@@ -634,8 +634,7 @@ class MainWindow(QMainWindow):
 
         self.provider = provider_cls(self.settings.get_title(), self.settings.get_chapter(),
                                      self.settings.get_chapter_rate(), self.data_folder, self.cache_folder,
-                                     self.settings.get_provider_type(),
-                                     num_workers=self.settings.get_advanced_settings()["misc"]["num_workers"])
+                                     self.settings.get_provider_type(), num_workers=self.settings.get_advanced_settings()["misc"]["num_workers"])
         self.provider.set_blacklisted_websites(self.settings.get_blacklisted_websites())
 
         if self.provider.get_search_results(None):
@@ -763,10 +762,12 @@ class MainWindow(QMainWindow):
 
     def downscale_checkbox_toggled(self):
         self.settings.set_downscaling(self.downscale_checkbox.isChecked())
+        self.downscaling = self.downscale_checkbox.isChecked()
         self.force_rescale = True
 
     def upscale_checkbox_toggled(self):
         self.settings.set_upscaling(self.upscale_checkbox.isChecked())
+        self.upscaling = self.upscale_checkbox.isChecked()
         self.force_rescale = True
 
     def apply_manual_content_width(self):
@@ -915,15 +916,14 @@ class MainWindow(QMainWindow):
         min_size = self.width() // 10
         content_width = self.transparent_image.pixmap().width() if self.transparent_image.pixmap() else 0  # Adjust the size of the transparent image based on window width
         if not min_size <= content_width <= max_size:  # If the current image width is outside the min and max size range, resize it
-            scaled_pixmap = QPixmap(os.path.abspath(self.provider.get_logo_path())).scaledToWidth(max_size,
-                                                                                                  Qt.SmoothTransformation)
+            scaled_pixmap = QPixmap(os.path.abspath(self.provider.get_logo_path())).scaledToWidth(max_size, Qt.SmoothTransformation)
             self.transparent_image.setPixmap(scaled_pixmap)
         self.transparent_image.setFixedSize(max_size, max_size)
 
     # Rest
     def reload_providers(self):
         provider_manager = AutoProviderManager(self.extensions_folder, AutoProviderPlugin, [
-            AutoProviderPlugin, AutoProviderBaseLike, AutoProviderBaseLike2])
+                        AutoProviderPlugin, AutoProviderBaseLike, AutoProviderBaseLike2])
         self.provider_dict = provider_manager.get_providers()
 
         self.provider_combobox.clear()
@@ -954,36 +954,37 @@ class MainWindow(QMainWindow):
         self.provider_combobox.setCurrentText(self.settings.get_provider())
 
     def save_settings(self):
-        self.settings.set_provider(self.provider_combobox.currentText())
-        self.settings.set_title(self.provider.get_title())
-        self.settings.set_chapter(self.provider.get_chapter())
-        self.settings.set_chapter_rate(self.provider.get_chapter_rate())
-        self.settings.set_provider_type(self.provider.get_provider_type())
+        if hasattr(self, "settings") and self.settings.is_open:
+            self.settings.set_provider(self.provider_combobox.currentText())
+            self.settings.set_title(self.provider.get_title())
+            self.settings.set_chapter(self.provider.get_chapter())
+            self.settings.set_chapter_rate(self.provider.get_chapter_rate())
+            self.settings.set_provider_type(self.provider.get_provider_type())
 
-        self.settings.set_blacklisted_websites(self.provider.get_blacklisted_websites())
+            self.settings.set_blacklisted_websites(self.provider.get_blacklisted_websites())
 
-        self.settings.set_hover_effect_all(self.hover_effect_all_checkbox.isChecked())
-        self.settings.set_borderless(self.borderless_checkbox.isChecked())
-        self.settings.set_acrylic_menus(self.acrylic_menus_checkbox.isChecked())
-        self.settings.set_acrylic_background(self.acrylic_background_checkbox.isChecked())
+            self.settings.set_hover_effect_all(self.hover_effect_all_checkbox.isChecked())
+            self.settings.set_borderless(self.borderless_checkbox.isChecked())
+            self.settings.set_acrylic_menus(self.acrylic_menus_checkbox.isChecked())
+            self.settings.set_acrylic_background(self.acrylic_background_checkbox.isChecked())
 
-        self.settings.set_downscaling(self.downscale_checkbox.isChecked())
-        self.settings.set_upscaling(self.upscale_checkbox.isChecked())
-        self.settings.set_lazy_loading(self.lazy_loading_checkbox.isChecked())
-        self.settings.set_manual_content_width(self.manual_width_spinbox.value())
+            self.settings.set_downscaling(self.downscale_checkbox.isChecked())
+            self.settings.set_upscaling(self.upscale_checkbox.isChecked())
+            self.settings.set_lazy_loading(self.lazy_loading_checkbox.isChecked())
+            self.settings.set_manual_content_width(self.manual_width_spinbox.value())
 
-        self.settings.set_hide_titlebar(self.hide_title_bar_checkbox.isChecked())
-        self.settings.set_hide_scrollbar(self.hide_scrollbar_checkbox.isChecked())
-        self.settings.set_stay_on_top(self.stay_on_top_checkbox.isChecked())
+            self.settings.set_hide_titlebar(self.hide_title_bar_checkbox.isChecked())
+            self.settings.set_hide_scrollbar(self.hide_scrollbar_checkbox.isChecked())
+            self.settings.set_stay_on_top(self.stay_on_top_checkbox.isChecked())
 
-        self.settings.set_save_last_titles(self.save_last_titles_checkbox.isChecked())
-        # self.settings.set_advanced_settings([])
+            self.settings.set_save_last_titles(self.save_last_titles_checkbox.isChecked())
+            # self.settings.set_advanced_settings([])
 
-        self.settings.set_geometry([self.x(), self.y(), self.width(), self.height()])
-        self.settings.set_last_scroll_positions(
-            [self.scrollarea.verticalScrollBar().value(), self.scrollarea.horizontalScrollBar().value()]
-        )
-        self.settings.set_scrolling_sensitivity(self.scroll_sensitivity_scroll_bar.value() / 10)
+            self.settings.set_geometry([self.x(), self.y(), self.width(), self.height()])
+            self.settings.set_last_scroll_positions(
+                [self.scrollarea.verticalScrollBar().value(), self.scrollarea.horizontalScrollBar().value()]
+            )
+            self.settings.set_scrolling_sensitivity(self.scroll_sensitivity_scroll_bar.value() / 10)
 
     def reload_gui(self, reload_geometry: bool = False, reload_position: bool = False):
         self.provider_combobox.setCurrentText(self.settings.get_provider())
@@ -1046,6 +1047,8 @@ class MainWindow(QMainWindow):
         self.content_paths = self.get_content_paths()
         self.reload_content()
         self.last_reload_ts = time.time()
+        self.downscaling = self.downscale_checkbox.isChecked()
+        self.upscaling = self.upscale_checkbox.isChecked()
 
     # Content management methods
     def get_wanted_width(self):
@@ -1064,9 +1067,9 @@ class MainWindow(QMainWindow):
             new_image_width = standard_image_width
             self.rescale_coefficient = abs(self.previous_scrollarea_width / self.scrollarea.viewport().width())
             self.previous_scrollarea_width = self.scrollarea.viewport().width()
-            if self.downscale_checkbox.isChecked() and standard_image_width > scroll_area_width:
+            if self.downscaling and standard_image_width > scroll_area_width:
                 new_image_width = scroll_area_width
-            elif self.upscale_checkbox.isChecked() and standard_image_width < scroll_area_width:
+            elif self.upscaling and standard_image_width < scroll_area_width:
                 new_image_width = scroll_area_width
             self.force_rescale = False
             return new_image_width
@@ -1093,8 +1096,7 @@ class MainWindow(QMainWindow):
                 widget.setFixedWidth(wanted_image_width)
 
         height = 0
-        for widget in [self.scrollarea.content_widget.layout().itemAt(i).widget() for i in
-                       range(self.scrollarea.content_widget.layout().count())]:
+        for widget in [self.scrollarea.content_widget.layout().itemAt(i).widget() for i in range(self.scrollarea.content_widget.layout().count())]:
             if hasattr(widget, "pixmap") and widget.pixmap():
                 height += widget.pixmap().height()
             else:
@@ -1229,23 +1231,12 @@ class MainWindow(QMainWindow):
     def set_theme(self):
         theme_setting = self.settings.get_advanced_settings()["themes"][self.os_theme]
 
-        if theme_setting == "light":
-            self.set_light_stylesheet()
-            self.app.setStyle("Fusion")
-            icon_theme_color = "light"
-        elif theme_setting == "light_light":
-            self.set_light_light_stylesheet()
-            icon_theme_color = "light"
-        elif theme_setting == "dark":
-            self.set_dark_stylesheet()
-            icon_theme_color = "dark"
-            self.app.setStyle("Fusion")
-        elif theme_setting == "light_dark":
-            self.set_light_dark_stylesheet()
-            icon_theme_color = "dark"
-        else:
-            self.app.setStyle("Fusion")
-            icon_theme_color = self.os_theme
+        theme = getattr(Themes, theme_setting)
+        if theme.stylesheet is not None:
+            self.setStyleSheet(theme.stylesheet)
+        if theme.app_style is not None:
+            self.app.setStyle(theme.app_style)
+        icon_theme_color = theme.theme_style if theme.theme_style != "os" else self.os_theme
         font = QFont(self.settings.get_advanced_settings().get("themes").get("font"), self.font().pointSize())
         self.setFont(font)
         for child in self.findChildren(QWidget):
@@ -1262,428 +1253,11 @@ class MainWindow(QMainWindow):
                 self.reload_content_button.setIcon(QIcon(f"{self.data_folder}/reload_icon_light.png"))
         self.theme = icon_theme_color
 
-    def set_light_stylesheet(self):
-        self.setStyleSheet("""
-            QWidget {
-                color: rgb(0, 0, 0);
-                background-color: #f0f0f0;           
-            }
-            QWidget:disabled {
-                color: rgb(127, 127, 127);
-                background-color: #e0e0e0;
-            }
-            QWidget#transparentImage {
-                background: transparent;
-            }
-            QWidget#sideMenu {
-                background: rgb(232, 230, 230); /*#e8e6e6#ededed*/
-            }
-            QCheckBox{
-                /*background-color: #e0e0e0;*/
-                border-radius: 5px;           
-            }
-            QRadioButton{
-                /*background-color: #e0e0e0;*/
-                border-radius: 5px;           
-            }
-            QLabel {
-                border-radius: 5px;
-                padding: 5px;
-                background-color: #d6d6d6; /*Before #d0d0d0, made it 6 lighter*/
-            }
-            ImageLabel {
-                padding: 0;
-                background-color: transparent;
-            }
-            QPushButton {
-                border: 1px solid #808080;
-                border-radius: 5px;
-                padding: 5px;
-                background-color: #e0e0e0;
-            }
-            QPushButton:hover {
-                background-color: #c0c0c0;
-            }
-            QToolButton {
-                border: 1px solid #808080;
-                border-radius: 5px;
-                background-color: #e0e0e0;
-            }
-            QToolButton:hover {
-                background-color: #c0c0c0;
-            }
-            /*QCheckBox::indicator:hover {
-                background-color: rgba(192, 192, 192, 50);
-            }*/
-            QScrollBar:horizontal {
-                border: none;
-                background-color: transparent;
-                height: 15px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:horizontal {
-                background-color: #aaaaaa;
-                min-height: 15px;
-                min-width: 40px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:hover {
-                background-color: #888888;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                border: none;
-                background: none;
-            }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-                background: none;
-            }
-
-            QScrollBar:vertical {
-                border: none;
-                background-color: transparent;
-                width: 15px;
-                border-radius: 7px;
-                /*border-top-right-radius: 10px;
-                border-bottom-right-radius: 10px;*/
-            }
-            QScrollBar::handle:vertical {
-                background-color: #aaaaaa;
-                min-height: 20px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:hover {
-                background-color: #888888;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                border: none;
-                background: none;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
-
-            QScrollBar::corner {
-                background: #f0f0f0;
-                border: none;
-            }
-        """)
-
-    def set_light_light_stylesheet(self):
-        self.setStyleSheet("""
-            QWidget {
-                color: rgb(0, 0, 0);
-                background-color: #f0f0f0;           
-            }
-            QWidget:disabled {
-                color: rgb(127, 127, 127);
-                background-color: #e0e0e0;
-            }
-            QComboBox {
-                border: 1px solid #808080;
-                border-radius: 5px;
-                padding: 5px;
-                background-color: #e0e0e0;
-                selection-background-color: #c0c0c0;
-                selection-color: black;
-            }
-            QComboBox::drop-down {
-                border: none;
-                background: transparent;
-            }
-            QComboBox::down-arrow {
-                image: url(data/arrow-down.png);
-            }
-            QCheckBox{
-                /*background-color: #e0e0e0;*/
-                border-radius: 5px;           
-            }
-            QLabel {
-                border-radius: 5px;
-                padding: 5px;
-                background-color: #d6d6d6; /*Before #d0d0d0, made it 6 lighter*/
-            }
-            ImageLabel {
-                padding: 0;
-                background-color: transparent;
-            }
-            QWidget#transparentImage {
-                background: transparent;
-            }
-            QPushButton {
-                border: 1px solid #808080;
-                border-radius: 5px;
-                padding: 5px;
-                background-color: #e0e0e0;
-            }
-            QPushButton:hover {
-                background-color: #c0c0c0;
-            }
-            QToolButton {
-                border: 1px solid #808080;
-                border-radius: 5px;
-                background-color: #e0e0e0;
-            }
-            QToolButton:hover {
-                background-color: #c0c0c0;
-            }
-            QScrollBar:horizontal {
-                border: none;
-                background-color: transparent;
-                height: 15px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:horizontal {
-                background-color: #aaaaaa;
-                min-height: 15px;
-                min-width: 40px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:hover {
-                background-color: #888888;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                border: none;
-                background: none;
-            }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-                background: none;
-            }
-
-            QScrollBar:vertical {
-                border: none;
-                background-color: transparent;
-                width: 15px;
-                border-radius: 7px;
-                /*border-top-right-radius: 10px;
-                border-bottom-right-radius: 10px;*/
-            }
-            QScrollBar::handle:vertical {
-                background-color: #aaaaaa;
-                min-height: 20px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:hover {
-                background-color: #888888;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                border: none;
-                background: none;
-            }
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                background: none;
-            }
-
-            QScrollBar::corner {
-                background: #f0f0f0;
-                border: none;
-            }
-        """)
-
     def set_dark_stylesheet(self):
-        self.setStyleSheet("""
-            QWidget {
-                color: rgb(255, 255, 255);
-                background-color: #333333;
-            }
-            QWidget:disabled {
-                color: rgb(127, 127, 127);
-                background-color: #444444;
-            }
-            QWidget#transparentImage {
-                background: transparent;
-            }
-            QWidget#sideMenu {
-                background: #383838; /*Lighter color for the side menu background (#393939)*/
-            }
-            QCheckBox{
-                /*background-color: #444444;*/
-                border-radius: 5px;           
-            }
-            QRadioButton{
-                /*background-color: #444444;*/
-                border-radius: 5px;           
-            }
-            QLabel {
-                border-radius: 5px;
-                padding: 5px;
-                background-color: #4f4f4f; /*Before #555555, made it 6 darker*/
-            }
-            ImageLabel {
-                padding: 0;
-                background-color: transparent;
-            }
-            QPushButton {
-                border: 1px solid #aaaaaa;
-                border-radius: 5px;
-                padding: 5px;
-                background-color: #444444;
-            }
-            QPushButton:hover {
-                background-color: #555555;
-            }
-            QToolButton {
-                border: 1px solid #aaaaaa;
-                border-radius: 5px;
-                background-color: #444444;
-            }
-            QToolButton:hover {
-                background-color: #555555;
-            }
-            /*QCheckBox::indicator:hover {
-                background-color: rgba(85, 85, 85, 50);
-            }*/
-            QScrollBar:horizontal {
-                border: none;
-                background: transparent;  /* Ensure the background is transparent */
-                height: 15px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:horizontal {
-                background-color: #666666;
-                min-height: 15px;
-                min-width: 40px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:hover {
-                background-color: #555555;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                border: none;
-                background: none;
-            }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-                background: none;
-            }
-
-            QScrollBar:vertical {
-                border: none;
-                background: transparent;
-                width: 15px;
-                border-radius: 7px;
-                /*border-top-right-radius: 10px;
-                border-bottom-right-radius: 10px;*/
-            }
-            QScrollBar::handle:vertical {
-                background: #666666;
-                min-height: 20px;
-                border-radius: 7px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                border: none;
-                background: none;
-            }
-
-            QScrollBar::corner {
-                background: #f0f0f0;
-                border: none;
-            }
-        """)
+        self.setStyleSheet(Themes.dark[0])
 
     def set_light_dark_stylesheet(self):
-        self.setStyleSheet("""
-            QWidget {
-                color: rgb(255, 255, 255);
-                background-color: #333333;
-            }
-            QWidget:disabled {
-                color: rgb(127, 127, 127);
-                background-color: #444444;
-            }
-            QComboBox {
-                border: 1px solid #808080;
-                border-radius: 5px;
-                padding: 5px;
-                background-color: #e0e0e0;
-                selection-background-color: #c0c0c0;
-                selection-color: black;
-            }
-            QComboBox::drop-down {
-                border: none;
-                background: transparent;
-            }
-            QComboBox::down-arrow {
-                image: url(data/arrow-down.png);
-            }
-            QCheckBox{
-                /*background-color: #e0e0e0;*/
-                border-radius: 5px;           
-            }
-            QLabel {
-                border-radius: 5px;
-                padding: 5px;
-            }
-            ImageLabel {
-                padding: 0;
-                background-color: transparent;
-            }
-            QWidget#transparentImage {
-                background: transparent;
-            }
-            QPushButton {
-                border: 1px solid #aaaaaa;
-                border-radius: 5px;
-                padding: 5px;
-                background-color: #444444;
-            }
-            QPushButton:hover {
-                background-color: #555555;
-            }
-            QToolButton {
-                border: 1px solid #aaaaaa;
-                border-radius: 5px;
-                background-color: #444444;
-            }
-            QToolButton:hover {
-                background-color: #555555;
-            }
-            QScrollBar:horizontal {
-                border: none;
-                background: transparent;  /* Ensure the background is transparent */
-                height: 15px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:horizontal {
-                background-color: #666666;
-                min-height: 15px;
-                min-width: 40px;
-                border-radius: 7px;
-            }
-            QScrollBar::handle:hover {
-                background-color: #555555;
-            }
-            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-                border: none;
-                background: none;
-            }
-            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
-                background: none;
-            }
-
-            QScrollBar:vertical {
-                border: none;
-                background: transparent;
-                width: 15px;
-                border-radius: 7px;
-                /*border-top-right-radius: 10px;
-                border-bottom-right-radius: 10px;*/
-            }
-            QScrollBar::handle:vertical {
-                background: #666666;
-                min-height: 20px;
-                border-radius: 7px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
-            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
-                border: none;
-                background: none;
-            }
-
-            QScrollBar::corner {
-                background: #f0f0f0;
-                border: none;
-            }
-        """)
+        self.setStyleSheet(Themes.light_dark[0])
 
     def update_theme(self, new_theme: str):
         self.os_theme = new_theme

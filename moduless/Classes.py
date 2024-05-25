@@ -128,7 +128,7 @@ class QSmoothScrollingList(QListWidget):
 
 
 class AdvancedSettingsDialog(QDialog):
-    def __init__(self, parent=None, current_settings: dict = None, default_settings: dict = None, master=None):
+    def __init__(self, parent=None, current_settings: dict = None, default_settings: dict = None, master=None, available_themes=None):
         super().__init__(parent, Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
 
         if default_settings is None:
@@ -140,11 +140,14 @@ class AdvancedSettingsDialog(QDialog):
         else:
             self.default_settings = default_settings
         if current_settings is None:
-            self.current_settings = self.default_settings
-        else:
-            self.current_settings = current_settings
+            current_settings = self.default_settings
+        self.current_settings = current_settings
         self.selected_settings = None
         self.master = master
+
+        if available_themes is None:
+            available_themes = ('light', 'light_light', 'dark', 'light_dark', 'modern', 'old', 'default')
+        self.available_themes = tuple(self._format_theme_name(theme_name) for theme_name in available_themes)
 
         self.setWindowTitle("Advanced Settings")
         self.resize(600, 300)
@@ -166,8 +169,8 @@ class AdvancedSettingsDialog(QDialog):
         self.themeLayout = QFormLayout(self.themeGroupBox)
         self.lightThemeComboBox = QComboBox(self.themeGroupBox)
         self.darkThemeComboBox = QComboBox(self.themeGroupBox)
-        self.lightThemeComboBox.addItems(['Light Theme', '(Light) Light Theme', 'Dark Theme', '(Light) Dark Theme', 'Modern'])
-        self.darkThemeComboBox.addItems(['Light Theme', '(Light) Light Theme', 'Dark Theme', '(Light) Dark Theme', 'Modern'])
+        self.lightThemeComboBox.addItems(self.available_themes)
+        self.darkThemeComboBox.addItems(self.available_themes)
         self.fontComboBox = QFontComboBox(self.themeGroupBox)
         self.fontComboBox.currentFontChanged.connect(self.change_font)
         self.themeLayout.addRow(QLabel("Light Mode Theme:"), self.lightThemeComboBox)
@@ -273,6 +276,7 @@ class AdvancedSettingsDialog(QDialog):
 
         if not self.master.settings.is_open:
             self.master.settings.connect()
+        self.master.reload_window_title()
         self.master.reload_gui()
         self.reject()
 
@@ -282,8 +286,8 @@ class AdvancedSettingsDialog(QDialog):
         try:
             # Safely attempt to replace the database
             shutil.copyfile(new_db_path, temp_path)
-            os.remove(os.path.join(self.master.data_folder, "data2.db"))
-            shutil.move(temp_path, os.path.join(self.master.data_folder, "data2.db"))
+            os.remove(os.path.join(self.master.data_folder, "data.db"))
+            shutil.move(temp_path, os.path.join(self.master.data_folder, "data.db"))
         except Exception as e:
             print(f"Failed to replace the database: {e}")
             if os.path.exists(temp_path):
@@ -295,7 +299,7 @@ class AdvancedSettingsDialog(QDialog):
             with open(json_path, 'r') as file:
                 settings_data = json.load(file).get("settings")
 
-            db_path = os.path.join(self.master.data_folder, "data2.db")
+            db_path = os.path.join(self.master.data_folder, "data.db")
             connection = sqlite3.connect(db_path)
             cursor = connection.cursor()
 
@@ -313,13 +317,35 @@ class AdvancedSettingsDialog(QDialog):
             cursor.close()
             connection.close()
 
+    def _format_theme_name(self, theme_name: str):
+        """
+        Formats the theme name by adding parentheses if needed and appending ' Theme' if the name includes 'light' or 'dark'.
+
+        Args:
+        theme (str): The theme name.
+
+        Returns:
+        str: The formatted theme name.
+        """
+        # Add parentheses to the first word if there are more than 2
+        formatted_name = ("(" if "_" in theme_name else "") + theme_name.replace("_", ") ", 1).replace("_", " ").title()
+
+        # Append 'Theme' if 'light' or 'dark' is part of the theme name
+        if "light" in theme_name or "dark" in theme_name:
+            formatted_name += " Theme"
+
+        return formatted_name
+
     def load_settings(self, settings: dict):
         self.recentTitlesList.clear()
         recent_titles = settings.get("recent_titles")
         recent_titles.reverse()
         self.recentTitlesList.addItems((' '.join(word[0].upper() + word[1:] if word else '' for word in title.split()) for title in recent_titles))
-        self.lightThemeComboBox.setCurrentText(("(" if "_" in settings.get("themes").get("light") else "") + settings.get("themes").get("light").replace("_", ") ").title() + (" Theme" if settings.get("themes").get("light") != "modern" else ""))
-        self.darkThemeComboBox.setCurrentText(("(" if "_" in settings.get("themes").get("dark") else "") + settings.get("themes").get("dark").replace("_", ") ").title() + (" Theme" if settings.get("themes").get("dark") != "modern" else ""))
+
+        light_theme = settings.get("themes").get("light")
+        dark_theme = settings.get("themes").get("dark")
+        self.lightThemeComboBox.setCurrentText(self._format_theme_name(light_theme))
+        self.darkThemeComboBox.setCurrentText(self._format_theme_name(dark_theme))
         self.fontComboBox.setCurrentText(settings.get("themes").get("font"))
 
         self.fileLocationLineEdit.setText(settings.get("settings_file_path", ""))
@@ -362,15 +388,19 @@ class AdvancedSettingsDialog(QDialog):
         self.update()
         self.repaint()
 
+    def _save_theme(self, theme_display_name):
+        stripped_theme_name = theme_display_name.lstrip("(").lower().replace(") ", "_")
+        if "light" in stripped_theme_name or "dark" in stripped_theme_name:
+            stripped_theme_name = stripped_theme_name.removesuffix(" theme")
+        return stripped_theme_name.replace(" ", "_")
+
     def accept(self):
         # Collect all settings here for processing
         self.selected_settings = {
             "recent_titles": list(reversed([self.recentTitlesList.item(x).text().lower() for x in range(self.recentTitlesList.count())])),
             "themes": {
-                "light": self.lightThemeComboBox.currentText().lstrip("(").lower().replace(") ", "_").removesuffix(
-                    " theme"),
-                "dark": self.darkThemeComboBox.currentText().lstrip("(").lower().replace(") ", "_").removesuffix(
-                    " theme"),
+                "light": self._save_theme(self.lightThemeComboBox.currentText()),
+                "dark": self._save_theme(self.darkThemeComboBox.currentText()),
                 "font": self.fontComboBox.currentText()},
             "settings_file_path": self.fileLocationLineEdit.text(),
             "settings_file_mode": "overwrite" if self.overwriteRadioButton.isChecked() else "modify" if self.modifyRadioButton.isChecked() else "create_new",
@@ -870,7 +900,7 @@ class CustomScrollArea(QWidget):
         else:
             return Qt.ScrollBarPolicy.ScrollBarAlwaysOn
 
-    def horizontalScrollBarPolicy(self, policy):
+    def horizontalScrollBarPolicy(self):
         if self._hor_scroll_pol == "as":
             return Qt.ScrollBarPolicy.ScrollBarAsNeeded
         elif self._hor_scroll_pol == "off":
