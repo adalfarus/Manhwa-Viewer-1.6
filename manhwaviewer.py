@@ -1,3 +1,5 @@
+import config
+
 from PySide6.QtWidgets import (QApplication, QLabel, QVBoxLayout, QScrollArea, QWidget, QMainWindow, QCheckBox,
                                QHBoxLayout, QScroller, QSpinBox, QPushButton, QGraphicsOpacityEffect,
                                QScrollerProperties, QFrame, QComboBox, QFormLayout, QLineEdit, QRadioButton, QDialog,
@@ -30,6 +32,9 @@ import time
 import sys
 import os
 import multiprocessing
+
+import stdlib_list
+hiddenimports = list(stdlib_list.stdlib_list())
 
 set_working_dir_to_main_script_location()
 multiprocessing.freeze_support()
@@ -203,7 +208,7 @@ class Settings:
             "blacklisted_websites": "247manga.com, ww6.mangakakalot.tv, jimanga.com, mangapure.net, mangareader.mobi, onepiece.fandom.com, mangaowl.io",
             "export_settings": "",
             "auto_export": "False",
-            "provider_type": "indirect",
+            "provider_type": "direct",
             "chapter_rate": "0.5",
             "no_update_info": "True",
             "update_info": "True",
@@ -410,7 +415,18 @@ class Settings:
 class ManhwaViewer(QMainWindow):
     def __init__(self, parent=None):
         def check_for_update():
-            response = requests.get("https://raw.githubusercontent.com/adalfarus/update_check/main/mv/update.json")
+            try:
+                response = requests.get("https://raw.githubusercontent.com/adalfarus/update_check/main/mv/update.json")
+            except Exception as e:
+                title = "Info"
+                text = "There was an error when checking for updates."
+                description = f"{e}"
+                msg_box = AdvancedQMessageBox(self, QMessageBox.Icon.Information, title, text, description,
+                                              standardButtons=QMessageBox.StandardButton.Ok,
+                                              defaultButton=QMessageBox.StandardButton.Ok)
+
+                msg_box.exec()
+                return
             try:
                 update_json = response.json()
             except (requests.exceptions.RequestException, requests.exceptions.JSONDecodeError, ValueError) as e:
@@ -424,7 +440,7 @@ class ManhwaViewer(QMainWindow):
                 if release["versionNumber"] == newest_version:
                     newest_version_data = release
             push = newest_version_data["push"].title() == "True"
-            current_version = "1.6.2"
+            current_version = "1.6.3"
             found_version = None
 
             # Find a version bigger than the current version and prioritize versions with push
@@ -517,10 +533,11 @@ class ManhwaViewer(QMainWindow):
         self.system = System()
         self.theme = ""
 
-        if self.system.get_windows_theme().lower() != self.theme:
-            self.update_theme()
+        theme = self.system.get_windows_theme() or os.environ.get('MV_THEME') or "light"
+        if theme.lower() != self.theme:
+            self.update_theme(theme.lower())
 
-        self.setWindowTitle('Manhwa Viewer 1.6.2')
+        self.setWindowTitle('Manhwa Viewer 1.6.3')
         self.setWindowIcon(QIcon(f'{self.data_folder}Untitled-1-noBackground.png'))
 
         db_path = f"{self.data_folder}data.db"
@@ -624,6 +641,16 @@ class ManhwaViewer(QMainWindow):
         self.update_provider_logo()
         self.update_content()
         QTimer.singleShot(50, self.set_scroll_positions)
+
+        self.plugin_radio_button_file.setEnabled(False)
+        self.file_label.setEnabled(False)
+        self.file_lineEdit.setEnabled(False)
+        self.fileLocationToolButton.setEnabled(False)
+        self.blacklist_button.setEnabled(False)
+        self.invisible_background_checkbox.setEnabled(False)
+        self.auto_export_checkbox.setEnabled(False)
+        self.export_button.setEnabled(False)
+        self.export_settings_button.setEnabled(False)
 
     def setupUi(self):
         # Central Widget
@@ -803,7 +830,7 @@ class ManhwaViewer(QMainWindow):
 
         # Checkboxes
         self.borderless_checkbox = QCheckBox('Borderless')
-        self.invisible_background_checkbox = QCheckBox('Invisible W.I.P')
+        self.invisible_background_checkbox = QCheckBox('Invisible Back')
         self.side_menu_layout.addRow(self.borderless_checkbox, self.invisible_background_checkbox)
         self.hide_scrollbar_checkbox = QCheckBox('Hide Scrollbar')
         self.stay_on_top_checkbox = QCheckBox('Stay on top')
@@ -860,7 +887,7 @@ class ManhwaViewer(QMainWindow):
 
     def reload_window_title(self):
         new_title = ' '.join(word[0].upper() + word[1:] if word else '' for word in self.prov.get_title().split())
-        self.setWindowTitle(f'MV 1.6.2 | {new_title}, Chapter {self.prov.get_chapter()}')
+        self.setWindowTitle(f'MV 1.6.3 | {new_title}, Chapter {self.prov.get_chapter()}')
 
     def title_selector_helper(self, new_title):
         self.title_selector.setText(new_title)
@@ -1056,6 +1083,7 @@ class ManhwaViewer(QMainWindow):
             event.ignore()
 
     def onRadioBtnToggled(self, no_change=False):
+        return
         if self.plugin_radio_button_file.isChecked():
             self.prov = ManhwaFilePlugin(self.settings.get_chapter(), self.settings.get_file_path(), self.data_folder,
                                          self.cache_folder)
@@ -1655,8 +1683,8 @@ class ManhwaViewer(QMainWindow):
             }
         """)
 
-    def update_theme(self):
-        self.theme = self.system.get_windows_theme().lower()
+    def update_theme(self, new_theme):
+        self.theme = new_theme
         if int(self.system.get_os_version()[0:2]) <= 10:  # False 10 even on 11
             if self.theme == "light":
                 self.set_light_theme()
@@ -1664,9 +1692,12 @@ class ManhwaViewer(QMainWindow):
                 self.set_dark_theme()
 
     def timer_tick(self):
-        if not self.threading: self.update_content()
-        if random.randint(0, 20) == 0 and self.system.get_windows_theme().lower() != self.theme:
-            self.update_theme()
+        if not self.threading:
+            self.update_content()
+        if random.randint(0, 20) == 0:
+            curr_theme = self.system.get_windows_theme() or os.environ.get('MV_THEME') or "light"
+            if curr_theme.lower() != self.theme:
+                self.update_theme(curr_theme.lower())
         # print("Update tick") # Debug
 
 

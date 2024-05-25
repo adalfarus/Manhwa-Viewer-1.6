@@ -2,7 +2,7 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "ManhwaViewer"
-#define MyAppVersion "1.6.2"
+#define MyAppVersion "1.6.3"
 #define MyAppPublisher "Cariel Becker"
 #define MyAppURL "https://www.cariel-becker.com/"
 #define MyAppExeName "manhwaviewer.exe"
@@ -13,7 +13,7 @@
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
-AppId={{453B5B02-D5C2-4C76-9CF4-E7FB203DAC9C}
+AppId={{6176E847-851E-4A28-AC30-9196BB257F40}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -30,7 +30,7 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ;PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=.\
-OutputBaseFilename=manhwaviewer-v1.6.2-win10-11-x64-installer
+OutputBaseFilename=manhwaviewer-v1.6.3-win10-11-x64-installer
 SetupIconFile=./data/Untitled-1.ico
 ;Password=88ef5ac2-477c-41c2-afb5-5689a3ae98a5
 ;Encryption=yes
@@ -87,4 +87,3 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
-
