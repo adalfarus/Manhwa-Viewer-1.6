@@ -1,1 +1,0 @@
-(Currently the program works for Windows 10-2004 to 11-23H2, but I could make it so it works entirely on Windows 10 and 11, just Windows 7 and lower will never work. Linux and Mac would need more modification but are also okay, just that I wouldn't be able to easily test them)

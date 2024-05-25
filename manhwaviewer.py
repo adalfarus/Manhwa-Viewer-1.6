@@ -3,16 +3,17 @@ import config
 from PySide6.QtWidgets import (QApplication, QLabel, QVBoxLayout, QScrollArea, QWidget, QMainWindow, QCheckBox,
                                QHBoxLayout, QScroller, QSpinBox, QPushButton, QGraphicsOpacityEffect,
                                QScrollerProperties, QFrame, QComboBox, QFormLayout, QLineEdit, QRadioButton, QDialog,
-                               QToolButton, QMessageBox, QFileDialog)
-from PySide6.QtGui import QDesktopServices, QPixmap, QIcon, QDoubleValidator, QFont
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QUrl
+                               QToolButton, QMessageBox, QFileDialog, QScrollBar)
+from PySide6.QtGui import QDesktopServices, QPixmap, QIcon, QDoubleValidator, QFont, QWheelEvent
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QUrl, QEasingCurve
 from PySide6.QtMultimedia import QMediaPlayer
 from PySide6.QtMultimediaWidgets import QVideoWidget
 from PySide6.QtWebEngineWidgets import QWebEngineView
 
 from modules.AutoProviderPlugin import AutoProviderPlugin, AutoProviderBaseLike, AutoProviderBaseLike2
 from modules.ManhwaFilePlugin import ManhwaFilePlugin
-from modules.Classes import ExportDialog, CustomProgressDialog, ImageLabel, SearchWidget, AdvancedQMessageBox
+from modules.Classes import (ExportDialog, CustomProgressDialog, ImageLabel, SearchWidget, AdvancedQMessageBox,
+                             CustomComboBox)
 
 from aplustools.data import database
 from aplustools.io import loggers
@@ -21,12 +22,11 @@ from aplustools.data.updaters import vNum
 from aplustools.io.environment import System, set_working_dir_to_main_script_location
 from aplustools.utils import imagetools
 
-from typing import Optional, List
+from typing import Optional, List, Literal
 import importlib.util
 import requests
 import base64
 import random
-import queue
 import json
 import time
 import sys
@@ -212,7 +212,8 @@ class Settings:
             "chapter_rate": "0.5",
             "no_update_info": "True",
             "update_info": "True",
-            "last_scroll_positions": "0, 0"
+            "last_scroll_positions": "0, 0",
+            "scrolling_sensitivity": "4.0"
         }
         if overwrite_settings:
             self.settings.update(overwrite_settings)
@@ -234,7 +235,7 @@ class Settings:
             return self.str_to_list(value)
         elif key in ["chapter"]:
             return int(value) if float(value).is_integer() else float(value)
-        elif key in ["chapter_rate"]:
+        elif key in ["chapter_rate", "scrolling_sensitivity"]:
             return float(value)
         elif key in ["downscaling", "upscaling", "borderless", "invisible_background", "hide_scrollbar", "stay_on_top",
                      "auto_export",
@@ -251,7 +252,7 @@ class Settings:
             value = self.list_to_str(value)
         elif key in ["chapter"]:
             value = str(int(value) if float(value).is_integer() else value)
-        elif key in ["chapter_rate"]:
+        elif key in ["chapter_rate", "scrolling_sensitivity"]:
             value = str(float(value))
         elif key in ["downscaling", "upscaling", "borderless", "invisible_background", "hide_scrollbar", "stay_on_top",
                      "auto_export",
@@ -390,6 +391,12 @@ class Settings:
     def set_last_scroll_positions(self, value):
         self.set("last_scroll_positions", value)
 
+    def get_scrolling_sensitivity(self):
+        return self.get("scrolling_sensitivity")
+
+    def set_scrolling_sensitivity(self, value):
+        self.set("scrolling_sensitivity", value)
+
     def setup_database(self, settings):
         # Define tables and their columns
         tables = {
@@ -410,6 +417,87 @@ class Settings:
     def update_data(self):
         for key, value in self.settings.items():
             self.db.update_info((key, value), "settings", ["key", "value"])
+
+
+class QAdvancedSmoothScrollingArea(QScrollArea):
+    def __init__(self, parent=None, sensitivity: int = 1):
+        super().__init__(parent)
+        self.setWidgetResizable(True)
+
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        # Scroll animations for both scrollbars
+        self.v_scroll_animation = QPropertyAnimation(self.verticalScrollBar(), b"value")
+        self.h_scroll_animation = QPropertyAnimation(self.horizontalScrollBar(), b"value")
+        for anim in (self.v_scroll_animation, self.h_scroll_animation):
+            anim.setEasingCurve(QEasingCurve.OutCubic)
+            anim.setDuration(500)
+
+        self.sensitivity = sensitivity
+
+        # Scroll accumulators
+        self.v_toScroll = 0
+        self.h_toScroll = 0
+
+        self.primary_scrollbar = "vertical"
+
+    def set_primary_scrollbar(self, new_primary_scrollbar: Literal["vertical", "horizontal"]):
+        self.primary_scrollbar = new_primary_scrollbar
+
+    def change_scrollbar_state(self, scrollbar: Literal["vertical", "horizontal"], state: bool = False):
+        state = Qt.ScrollBarPolicy.ScrollBarAsNeeded if state else Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+
+        if scrollbar == "vertical":
+            self.setVerticalScrollBarPolicy(state)
+        else:
+            self.setHorizontalScrollBarPolicy(state)
+
+    def wheelEvent(self, event: QWheelEvent):
+        horizontal_event_dict = {
+            "scroll_bar": self.horizontalScrollBar(),
+            "animation": self.h_scroll_animation,
+            "toScroll": self.h_toScroll
+        }
+        vertical_event_dict = {
+            "scroll_bar": self.verticalScrollBar(),
+            "animation": self.v_scroll_animation,
+            "toScroll": self.v_toScroll
+        }
+
+        # Choose scroll bar based on right mouse button state
+        if event.buttons() & Qt.MouseButton.RightButton:
+            event_dict = horizontal_event_dict if self.primary_scrollbar == "vertical" else vertical_event_dict
+        else:
+            event_dict = vertical_event_dict if self.primary_scrollbar == "vertical" else horizontal_event_dict
+
+        angle_delta = event.angleDelta().y()
+        steps = angle_delta / 120
+        pixel_step = int(event_dict.get("scroll_bar").singleStep() * self.sensitivity)
+
+        if event_dict.get("animation").state() == QPropertyAnimation.Running:
+            event_dict.get("animation").stop()
+            event_dict["toScroll"] += event_dict.get("animation").endValue() - event_dict.get("scroll_bar").value()
+
+        current_value = event_dict.get("scroll_bar").value()
+        max_value = event_dict.get("scroll_bar").maximum()
+        min_value = event_dict.get("scroll_bar").minimum()
+
+        # Inverted scroll direction calculation
+        event_dict["toScroll"] -= pixel_step * steps
+        proposed_value = current_value + event_dict["toScroll"]  # Reflecting changes
+
+        if proposed_value > max_value and steps > 0:
+            event_dict["toScroll"] = 0
+        elif proposed_value < min_value and steps < 0:
+            event_dict["toScroll"] = 0
+
+        new_value = current_value + event_dict["toScroll"]
+        event_dict.get("animation").setStartValue(current_value)
+        event_dict.get("animation").setEndValue(new_value)
+        event_dict.get("animation").start()
+
+        event.accept()  # Prevent further processing of the event
 
 
 class ManhwaViewer(QMainWindow):
@@ -440,7 +528,7 @@ class ManhwaViewer(QMainWindow):
                 if release["versionNumber"] == newest_version:
                     newest_version_data = release
             push = newest_version_data["push"].title() == "True"
-            current_version = "1.6.3"
+            current_version = "1.6.4"
             found_version = None
 
             # Find a version bigger than the current version and prioritize versions with push
@@ -537,7 +625,7 @@ class ManhwaViewer(QMainWindow):
         if theme.lower() != self.theme:
             self.update_theme(theme.lower())
 
-        self.setWindowTitle('Manhwa Viewer 1.6.3')
+        self.setWindowTitle('Manhwa Viewer 1.6.4')
         self.setWindowIcon(QIcon(f'{self.data_folder}Untitled-1-noBackground.png'))
 
         db_path = f"{self.data_folder}data.db"
@@ -589,6 +677,7 @@ class ManhwaViewer(QMainWindow):
         self.prev_downscale_state = self.settings.get_downscaling()
         self.prev_upscale_state = self.settings.get_upscaling()
         self.content_paths = self.get_content_paths()
+        print("Got content", self.content_paths)
         self.task_successful = False
         self.threading = False
 
@@ -597,12 +686,12 @@ class ManhwaViewer(QMainWindow):
         if self.settings.get_provider() == "auto":
             self.plugin_radio_button_auto.setChecked(True)
 
-        for i in self.providers.keys():
-            prov = self.providers[i]("", 1, 0.5, self.data_folder, self.cache_folder, "direct")
+        for i, p in enumerate(self.providers.keys()):
+            prov = self.providers[p]("", 1, 0.5, self.data_folder, self.cache_folder, "direct")
             icon_path = prov.get_logo_path()
-            prov = None
-            i = i.replace("AutoProviderPlugin", "")
-            self.provider_dropdown.addItem(QIcon(env.absolute_path(icon_path)), i)
+            self.provider_dropdown.addItem(QIcon(env.absolute_path(icon_path)), p.replace("AutoProviderPlugin", ""))
+            if "AutoProviderPlugin" not in p:
+                self.provider_dropdown.setItemUnselectable(i)
         self.provider_dropdown.setCurrentText(self.settings.get_autoprovider())
         # self.central_widget.setStyleSheet("background: transparent;")
 
@@ -632,14 +721,18 @@ class ManhwaViewer(QMainWindow):
             self.setWindowFlags(self.windowFlags() | Qt.WindowStaysOnTopHint)
         # self.show()
 
+        self.scroll_sensitivity_scroll_bar.setValue(int(self.settings.get_scrolling_sensitivity() * 10))
+        self.updateSensitivity(int(self.settings.get_scrolling_sensitivity() * 10))
+
         self.connectSignals()
         self.show()
         # Image Labels
-        self.force_update = False  # Moved here for better responsiveness, as lazy loading isn't introduced or stable yet
+        self.force_update = False
         self.reload_content()  # Sets self.content_widgets
+        self.force_update = True  # Moved here for better responsiveness, as lazy loading isn't introduced or stable yet
         self.onRadioBtnToggled(True)
-        self.update_provider_logo()
-        self.update_content()
+        # self.update_provider_logo()
+        # self.update_content()
         QTimer.singleShot(50, self.set_scroll_positions)
 
         self.plugin_radio_button_file.setEnabled(False)
@@ -659,14 +752,16 @@ class ManhwaViewer(QMainWindow):
         self.main_layout = QVBoxLayout(self.central_widget)
 
         # Scroll Area
-        self.scroll_area = QScrollArea()
+        self.scroll_area = QAdvancedSmoothScrollingArea(sensitivity=self.settings.get_scrolling_sensitivity())
         self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.verticalScrollBar().setSingleStep(30)
+        self.scroll_area.verticalScrollBar().setSingleStep(24)  # 60 // 2.5
         self.main_layout.addWidget(self.scroll_area)
 
         # Enable kinetic scrolling
         self.scroller = QScroller.scroller(self.scroll_area.viewport())
         self.scroller.grabGesture(self.scroll_area.viewport(), QScroller.ScrollerGestureType.TouchGesture)
+        # Additionally, grabbing left mouse button gestures
+        # QScroller.grabGesture(self.scroll_area.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
         self.scroller_props = self.scroller.scrollerProperties()
         new_props = QScrollerProperties(self.scroller_props)
         new_props.setScrollMetric(QScrollerProperties.ScrollMetric.MaximumVelocity, 0.3)
@@ -725,7 +820,7 @@ class ManhwaViewer(QMainWindow):
         # Side Menu
         self.side_menu = QFrame(self)
         self.side_menu.setObjectName("sideMenu")
-        self.side_menu.setFrameShape(QFrame.StyledPanel)
+        self.side_menu.setFrameShape(QFrame.Shape.StyledPanel)
         self.side_menu.setAutoFillBackground(True)
         self.side_menu.move(int(self.width() * 2 / 3), 0)
         self.side_menu.resize(int(self.width() / 3), self.height())
@@ -753,7 +848,7 @@ class ManhwaViewer(QMainWindow):
 
         self.side_menu_layout.addRow(self.file_layout)
 
-        self.provider_dropdown = QComboBox()  # itemIcon(
+        self.provider_dropdown = CustomComboBox()  # itemIcon(
 
         self.provider_layout = QHBoxLayout()
         self.provider_label = QLabel("Provider:")
@@ -838,6 +933,19 @@ class ManhwaViewer(QMainWindow):
 
         [self.side_menu_layout.addRow(QWidget()) for _ in range(3)]
 
+        self.scroll_sensitivity_scroll_bar = QScrollBar(Qt.Horizontal)
+        self.scroll_sensitivity_scroll_bar.setMinimum(1)  # QScrollBar uses integer values
+        self.scroll_sensitivity_scroll_bar.setMaximum(80)  # We multiply by 10 to allow decimal
+        self.scroll_sensitivity_scroll_bar.setValue(10)  # Default value set to 1.0 (10 in this scale)
+        self.scroll_sensitivity_scroll_bar.setSingleStep(1)
+        self.scroll_sensitivity_scroll_bar.setPageStep(1)
+
+        # Label to display the current sensitivity
+        self.sensitivity_label = QLabel("Current Sensitivity: 1.0")
+        self.side_menu_layout.addRow(self.sensitivity_label, self.scroll_sensitivity_scroll_bar)
+
+        [self.side_menu_layout.addRow(QWidget()) for _ in range(3)]
+
         self.auto_export_checkbox = QCheckBox('Auto Export')
         self.side_menu_layout.addRow(self.auto_export_checkbox)
         self.export_button = QPushButton("Export Chapter")
@@ -884,10 +992,18 @@ class ManhwaViewer(QMainWindow):
         self.timer.timeout.connect(self.timer_tick)
         self.search_animation.valueChanged.connect(self.search_animation_value_changed)
         self.search_widget.selectedItem.connect(self.title_selector_helper)
+        self.scroll_sensitivity_scroll_bar.valueChanged.connect(self.updateSensitivity)
+
+    def updateSensitivity(self, value):
+        # Convert the scrollbar value to the desired range 0.1 to 8
+        sensitivity = value / 10
+        self.settings.set_scrolling_sensitivity(sensitivity)
+        self.sensitivity_label.setText(f"Current Sensitivity: {sensitivity:.1f}")
+        self.scroll_area.sensitivity = sensitivity
 
     def reload_window_title(self):
         new_title = ' '.join(word[0].upper() + word[1:] if word else '' for word in self.prov.get_title().split())
-        self.setWindowTitle(f'MV 1.6.3 | {new_title}, Chapter {self.prov.get_chapter()}')
+        self.setWindowTitle(f'MV 1.6.4 | {new_title}, Chapter {self.prov.get_chapter()}')
 
     def title_selector_helper(self, new_title):
         self.title_selector.setText(new_title)
@@ -1072,6 +1188,7 @@ class ManhwaViewer(QMainWindow):
             if self.prov.__class__ != ManhwaFilePlugin: self.settings.set_chapter_rate(self.prov.get_chapter_rate())
             self.settings.set_last_scroll_positions(
                 [self.scroll_area.verticalScrollBar().value(), self.scroll_area.horizontalScrollBar().value()])
+            self.settings.set_scrolling_sensitivity(self.scroll_sensitivity_scroll_bar.value() / 10)
 
             sys.stdout.close()  # self.logger.close()
             self.db.close()
@@ -1127,7 +1244,35 @@ class ManhwaViewer(QMainWindow):
             if not no_change: self.change_provider()
         # self.repaint()
 
-    def change_provider(self):
+    def change_provider(self, *args, second: bool = False):
+        if not second:
+            self.temp = self.prov
+        self.prov = self.providers[f"AutoProviderPlugin{self.provider_dropdown.currentText()}"](
+            self.settings.get_title(), self.settings.get_chapter(), self.settings.get_chapter_rate(), self.data_folder,
+            self.cache_folder, self.settings.get_provider_type())
+        self.settings.set_autoprovider(self.provider_dropdown.currentText())
+        self.prov.set_blacklisted_websites(self.settings.get_blacklisted_websites())
+        self.logo_path = self.prov.get_logo_path()
+        if self.prov.get_search_results(None):
+            self.search_widget.set_search_results_func(self.prov.get_search_results)
+            # self.search_toggle_button.setEnabled(False)
+            self.search_widget.setEnabled(True)
+        else:
+            # self.search_toggle_button.setEnabled(False)
+            self.search_widget.setEnabled(False)
+        new_pixmap = QPixmap(env.absolute_path(self.logo_path))
+        self.transparent_image.setPixmap(new_pixmap)
+        self.update_provider_logo()
+        if not second:
+            QTimer.singleShot(50, self.check_prov)
+
+    def check_prov(self):
+        self.change_provider(second=True)
+        if type(self.prov) is not type(self.temp):
+            self.prov.redo_prep()
+            self.reload_content()
+
+    def old_change_provider(self):
         temp = self.prov
         self.prov = self.providers[f"AutoProviderPlugin{self.provider_dropdown.currentText()}"](
             self.settings.get_title(), self.settings.get_chapter(), self.settings.get_chapter_rate(), self.data_folder,
@@ -1306,7 +1451,7 @@ class ManhwaViewer(QMainWindow):
         self.update_content()
 
     def get_content_paths(self):
-        content_files = sorted([f for f in os.listdir(self.cache_folder) if f.endswith(('.png', '.mp4', '.txt'))])
+        content_files = sorted([f for f in os.listdir(self.cache_folder) if f.endswith(('.png', ".jpg", ".jpeg", ".webp", ".http", '.mp4', '.txt'))])
         content_paths = [os.path.join(self.cache_folder, f) for f in content_files]
         return content_paths
 
@@ -1397,7 +1542,7 @@ class ManhwaViewer(QMainWindow):
         self.content_widgets = []
         length = len(self.content_paths)
         for i, content_path in enumerate(self.content_paths):
-            if content_path.endswith(('.png', '.jpg', '.jpeg')):
+            if content_path.endswith(('.png', '.jpg', '.jpeg', '.webp')):
                 # For image content
                 image_label = ImageLabel()
                 pixmap = QPixmap(content_path)
@@ -1464,6 +1609,7 @@ class ManhwaViewer(QMainWindow):
         self.threading = False
 
     def chapter_loading_wrapper(self, func, failInfo, failText):
+        self.prov.redo_prep()
         self.threading_wrapper(True, True, func)
 
         if self.task_successful:
@@ -1515,6 +1661,25 @@ class ManhwaViewer(QMainWindow):
             }
             QWidget#sideMenu {
                 background: rgb(232, 230, 230); /*#e8e6e6#ededed*/
+            }
+            QScrollBar {
+                border: none;
+                background-color: transparent;
+                height: 15px;
+                border-radius: 7px;
+            }
+            QScrollBar::handle {
+                background-color: #aaaaaa;
+                min-height: 15px;
+                min-width: 40px;
+                border-radius: 7px;
+            }
+            QScrollBar::handle:hover {
+                background-color: #888888;
+            }
+            QScrollBar::add-line, QScrollBar::sub-line {
+                height: 0px;  /* Hide the buttons by setting height to 0 */
+                width: 0px;
             }
             QCheckBox{
                 /*background-color: #e0e0e0;*/
@@ -1609,6 +1774,25 @@ class ManhwaViewer(QMainWindow):
             }
             QWidget#sideMenu {
                 background: #383838; /*Lighter color for the side menu background (#393939)*/
+            }
+            QScrollBar {
+                border: none;
+                background: transparent;  /* Ensure the background is transparent */
+                height: 15px;
+                border-radius: 7px;
+            }
+            QScrollBar::handle {
+                background-color: #666666;
+                min-height: 15px;
+                min-width: 40px;
+                border-radius: 7px;
+            }
+            QScrollBar::handle:hover {
+                background-color: #555555;
+            }
+            QScrollBar::add-line, QScrollBar::sub-line {
+                height: 0px;  /* Hide the buttons by setting height to 0 */
+                width: 0px;
             }
             QCheckBox{
                 /*background-color: #444444;*/

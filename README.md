@@ -2,6 +2,11 @@
 
 If you want to use ManhwaViewer v1.6.3, just download the latest release [here](https://github.com/adalfarus/Manhwa-Viewer-1.6.2/releases).
 
+<p float="left">
+  <img src="/repo_images/repo_image_1.png" width="41%" />
+  <img src="/repo_images/repo_image_4.png" width="48%" />
+</p>
+
 ## For Users
 
 ### Basics:

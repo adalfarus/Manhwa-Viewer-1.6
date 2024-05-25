@@ -1,8 +1,8 @@
-from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout, QLineEdit, 
-                               QLabel, QCheckBox, QToolButton, QRadioButton, QDialogButtonBox, QFileDialog, 
-                               QApplication, QProgressDialog, QWidget, QListWidget, QSizePolicy, QListWidgetItem, 
-                               QMessageBox)
-from PySide6.QtCore import Qt, Signal, QThread, QTimer, Slot, QSize
+from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout, QLineEdit,
+                               QLabel, QCheckBox, QToolButton, QRadioButton, QDialogButtonBox, QFileDialog,
+                               QApplication, QProgressDialog, QWidget, QListWidget, QSizePolicy, QListWidgetItem,
+                               QMessageBox, QStyledItemDelegate, QComboBox)
+from PySide6.QtCore import Qt, Signal, QThread, QTimer, Slot, QSize, QModelIndex
 from PySide6.QtGui import QPainter, QBrush, QColor, QPen, QPalette, QIcon
 from aplustools.io import environment as env
 import threading
@@ -10,6 +10,7 @@ import random
 import ctypes
 import queue
 import time
+
 
 class ExportDialog(QDialog):
     def __init__(self, parent=None, export_settings=["", "", False, "", False, 0, 0]):
@@ -20,14 +21,14 @@ class ExportDialog(QDialog):
         self.urls = True if export_settings[4] == "True" else False
         self.file = int(export_settings[5])
         self.chapter = int(export_settings[6])
-        
+
         super().__init__(parent, Qt.WindowCloseButtonHint | Qt.WindowTitleHint)
         self.setWindowTitle("Dialog")
         self.resize(400, 100)
-        
+
         self.mainLayout = QVBoxLayout()
         self.setLayout(self.mainLayout)
-        
+
         self.stackLayout = QHBoxLayout()
 
         # Name Group
@@ -87,7 +88,7 @@ class ExportDialog(QDialog):
         self.chapterLayout.addWidget(self.appendChapterRadioButton)
 
         self.rightLayout.addWidget(self.chapterGroupBox)
-        
+
         self.stackLayout.addLayout(self.rightLayout)
 
         self.mainLayout.addLayout(self.stackLayout)
@@ -98,7 +99,7 @@ class ExportDialog(QDialog):
         self.buttonBox.rejected.connect(self.reject)
 
         self.mainLayout.addWidget(self.buttonBox)
-        
+
         self.titleLineEdit.setText(self.title)
         self.chapterLineEdit.setText(self.chapter_name)
         self.chapterCountUp.setChecked(self.count_up)
@@ -117,12 +118,12 @@ class ExportDialog(QDialog):
         elif self.chapter == 2:
             self.appendChapterRadioButton.setChecked(True)
         self.chapter_toggled()
-            
+
         self.fileLocationToolButton.clicked.connect(self.save_file)
         self.chapterCountUp.toggled.connect(self.count_up_method)
         self.overwriteFileRadioButton.toggled.connect(self.file_toggled)
         self.appendChapterRadioButton.toggled.connect(self.chapter_toggled)
-            
+
     def chapter_toggled(self):
         if self.appendChapterRadioButton.isChecked() and not self.overwriteFileRadioButton.isChecked():
             self.chapterLineEdit.setEnabled(False)
@@ -130,25 +131,27 @@ class ExportDialog(QDialog):
         else:
             self.chapterLineEdit.setEnabled(True)
             self.chapterCountUp.setEnabled(True)
-            
+
     def file_toggled(self):
         if self.overwriteFileRadioButton.isChecked():
             self.chapterGroupBox.setEnabled(False)
         else:
             self.chapterGroupBox.setEnabled(True)
         self.chapter_toggled()
-            
+
     def count_up_method(self):
         if self.chapterCountUp.isChecked():
             self.chapterLineEdit.setEnabled(False)
         else:
             self.chapterLineEdit.setEnabled(True)
-            
+
     def save_file(self):
-        value = QFileDialog.getSaveFileName(self, 'Save File', '', 'Manhwa Viewer Files (*.mwa *.mwa1 *.mvf);;Images (*.png *.xpm *.jpg *.webp)', 'Manhwa Viewer Files')
+        value = QFileDialog.getSaveFileName(self, 'Save File', '',
+                                            'Manhwa Viewer Files (*.mwa *.mwa1 *.mvf);;Images (*.png *.xpm *.jpg *.webp)',
+                                            'Manhwa Viewer Files')
         print(value)
         self.fileLocationLineEdit.setText(value[0])
-            
+
     def accept(self):
         self.count_up = self.chapterCountUp.isChecked()
         if self.overwriteFileRadioButton.isChecked():
@@ -161,13 +164,14 @@ class ExportDialog(QDialog):
             self.chapter = 1
         elif self.appendChapterRadioButton.isChecked():
             self.chapter = 2
-        self.resultValue = [self.titleLineEdit.text(), 
-                            self.chapterLineEdit.text(), self.count_up, 
-                            self.fileLocationLineEdit.text(), 
-                            self.saveAsUrlsCheckBox.isChecked(), 
+        self.resultValue = [self.titleLineEdit.text(),
+                            self.chapterLineEdit.text(), self.count_up,
+                            self.fileLocationLineEdit.text(),
+                            self.saveAsUrlsCheckBox.isChecked(),
                             self.file, self.chapter]
         super().accept()
-        
+
+
 class TaskRunner(QThread):
     task_completed = Signal(bool, object)
     progress_signal = Signal(int)
@@ -186,6 +190,7 @@ class TaskRunner(QThread):
 
     class TaskCanceledException(Exception):
         """Exception to be raised when the task is canceled"""
+
         def __init__(self, message="A intended error occured"):
             self.message = message
             super().__init__(self.message)
@@ -210,7 +215,7 @@ class TaskRunner(QThread):
                 print("Directly executing")
                 self.worker_func()
             self.task_completed.emit(self.success, self.result)
-            
+
         except Exception as e:
             self.task_completed.emit(False, None)
             print(e)
@@ -250,11 +255,12 @@ class TaskRunner(QThread):
                 ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
                 print("Exception raise failure")
 
+
 class CustomLabel(QLabel):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        
+
         if self.text():
             main_window = self.window()
             while main_window.parent() is not None:
@@ -264,21 +270,23 @@ class CustomLabel(QLabel):
                 painter.setBrush(QBrush(QColor('#d0d0d0')))
             else:
                 painter.setBrush(QBrush(QColor('#555555')))
-            
+
             painter.setPen(QPen(Qt.NoPen))  # No border outline
             radius = 5
             painter.drawRoundedRect(self.rect(), radius, radius)
 
         painter.end()
-        #super().paintEvent(event)
+        # super().paintEvent(event)
+
 
 class CustomProgressDialog(QProgressDialog):
-    def __init__(self, parent, windowTitle, windowIcon, windowLable="Doing a task...", buttonText="Cancel", new_thread=True, func=lambda: None, *args, **kwargs):
+    def __init__(self, parent, windowTitle, windowIcon, windowLable="Doing a task...", buttonText="Cancel",
+                 new_thread=True, func=lambda: None, *args, **kwargs):
         super().__init__(parent=parent, cancelButtonText=buttonText, minimum=0, maximum=100)
         self.setWindowTitle(windowTitle)
-        #self.setWindowIcon(QIcon(windowIcon))
-        #self.setStyleSheet(parent.styleSheet())
-        #self.setWindowFlags(parent.windowFlags())
+        # self.setWindowIcon(QIcon(windowIcon))
+        # self.setStyleSheet(parent.styleSheet())
+        # self.setWindowFlags(parent.windowFlags())
         self.setValue(0)
 
         self.customLayout = QVBoxLayout(self)
@@ -300,17 +308,18 @@ class CustomProgressDialog(QProgressDialog):
         self.last_value = 0
         self.current_value = 0
         QTimer.singleShot(50, self.taskRunner.start)
-        
+
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updateProgress)
         self.timer.start(100)
 
     def updateProgress(self):
         if self.value() <= 100 and not self.wasCanceled() and self.taskRunner.isRunning():
-            while self.current_value == 0 and self.value() < 10:
+            if self.current_value == 0 and self.value() < 10:
                 self.setValue(self.value() + 1)
-                time.sleep(random.randint(2, 10)*0.1)
-            if self.current_value >= 10: self.go_to_value()
+                time.sleep(random.randint(2, 10) * 0.1)
+            elif self.current_value >= 10:
+                self.go_to_value()
             time.sleep(0.1)
             QApplication.processEvents()
 
@@ -323,12 +332,12 @@ class CustomProgressDialog(QProgressDialog):
             self.setValue(self.current_value)
             self.last_value = self.current_value
             return
-            
-        for i in range(self.last_value, self.current_value):
-            self.setValue(i+1)
-            self.last_value = i+1
+
+        for i in range(max(10, self.last_value), self.current_value):
+            self.setValue(i + 1)
+            self.last_value = i + 1
             time.sleep(0.1)
-        #print(f"Exiting go_to_value with value {self.current_value} and last_value {self.last_value}") # Debug
+        # print(f"Exiting go_to_value with value {self.current_value} and last_value {self.last_value}") # Debug
 
     def resizeEvent(self, event):
         super(CustomProgressDialog, self).resizeEvent(event)
@@ -348,7 +357,8 @@ class CustomProgressDialog(QProgressDialog):
             if success:
                 self.task_successful = True
                 self.setValue(100)
-                print("Task completed successfully! Result:" + str("Finished" if result else "Not finished"))  # Adjust as needed
+                print("Task completed successfully! Result:" + str(
+                    "Finished" if result else "Not finished"))  # Adjust as needed
                 QTimer.singleShot(1000, self.accept)  # Close after 1 second if successful
             else:
                 palette = QPalette(self.palette())
@@ -368,10 +378,12 @@ class CustomProgressDialog(QProgressDialog):
         if self.taskRunner.isRunning():
             self.cancelTask()
         event.accept()
-        
+
+
 class ImageLabel(QLabel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
 
 class SearchResultItem(QWidget):
     def __init__(self, title, description, icon_path):
@@ -394,8 +406,10 @@ class SearchResultItem(QWidget):
 
         self.layout.addLayout(self.text_layout)
 
+
 class SearchWidget(QWidget):
     selectedItem = Signal(str)
+
     def __init__(self, search_results_func):
         super().__init__()
         self.initUI()
@@ -451,7 +465,7 @@ class SearchWidget(QWidget):
         self.adjustSize()
         self.updateGeometry()  # Notify the layout system of potential size change
         self.results_list.updateGeometry()  # Notify the layout system of potential size change
-        #self.window().adjustSize()  # Adjust the size of the parent window
+        # self.window().adjustSize()  # Adjust the size of the parent window
 
     def on_return_pressed(self):
         item = self.results_list.currentItem() or self.results_list.item(0)
@@ -468,12 +482,13 @@ class SearchWidget(QWidget):
         self.results_list.hide()
         self.selectedItem.emit(title)
 
+
 class AdvancedQMessageBox(QMessageBox):
-    def __init__(self, parent=None, icon=None, windowTitle='', text='', detailedText='', 
+    def __init__(self, parent=None, icon=None, windowTitle='', text='', detailedText='',
                  checkbox=None, standardButtons=QMessageBox.Ok, defaultButton=None):
         """
         An advanced QMessageBox with additional configuration options.
-        
+
         :param parent: The parent widget.
         :param icon: The icon to display.
         :param windowTitle: The title of the message box window.
@@ -491,3 +506,37 @@ class AdvancedQMessageBox(QMessageBox):
         if checkbox: self.setCheckBox(checkbox)
         self.setStandardButtons(standardButtons)
         if defaultButton: self.setDefaultButton(defaultButton)
+
+        self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMaximized)  # Set the window to stay on top initially
+
+        self.raise_()
+        self.activateWindow()
+
+
+class UnselectableDelegate(QStyledItemDelegate):
+    def editorEvent(self, event, model, option, index):
+        # Prevent selection of disabled items
+        data = model.itemData(index)
+        if Qt.UserRole in data and data[Qt.UserRole] == "disabled":
+            return False
+        return super().editorEvent(event, model, option, index)
+
+
+class CustomComboBox(QComboBox):
+    def __init__(self):
+        super().__init__()
+        self.setItemDelegate(UnselectableDelegate())
+        self.currentIndexChanged.connect(self.handleIndexChanged)
+        self.previousIndex = 0
+
+    def handleIndexChanged(self, index):
+        # If the newly selected item is disabled, revert to the previous item
+        if index in range(self.count()):
+            if self.itemData(index, Qt.UserRole) == "disabled":
+                self.setCurrentIndex(self.previousIndex)
+            else:
+                self.previousIndex = index
+
+    def setItemUnselectable(self, index):
+        # Set data role to indicate item is disabled
+        self.model().setData(self.model().index(index, 0), "disabled", Qt.UserRole)

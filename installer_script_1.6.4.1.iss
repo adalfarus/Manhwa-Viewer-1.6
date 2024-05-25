@@ -2,18 +2,20 @@
 ; SEE THE DOCUMENTATION FOR DETAILS ON CREATING INNO SETUP SCRIPT FILES!
 
 #define MyAppName "ManhwaViewer"
-#define MyAppVersion "1.6.3"
+#define MyAppVersion "1.6.4.1"
 #define MyAppPublisher "Cariel Becker"
 #define MyAppURL "https://www.cariel-becker.com/"
 #define MyAppExeName "manhwaviewer.exe"
 #define MyAppAssocName MyAppName + " File"
 #define MyAppAssocExt ".mwa1"
 #define MyAppAssocKey StringChange(MyAppAssocName, " ", "") + MyAppAssocExt
+#define MyAppDir ".\output\manhwaviewer\"
+#define MyAppId "954F3A85-E04F-4466-93AE-7BCA1EA71E06"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application. Do not use the same AppId value in installers for other applications.
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
-AppId={{6176E847-851E-4A28-AC30-9196BB257F40}
+AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}
@@ -30,10 +32,10 @@ DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ;PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=.\
-OutputBaseFilename=manhwaviewer-v1.6.3-win10-11-x64-encry-installer
+OutputBaseFilename=manhwaviewer-v1.6.4.1-win10-11-x64-installer
 SetupIconFile=./data/Untitled-1.ico
-Password=88ef5ac2-477c-41c2-afb5-5689a3ae98a5
-Encryption=yes
+;Password=88ef5ac2-477c-41c2-afb5-5689a3ae98a5
+;Encryption=yes
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
