@@ -1,20 +1,22 @@
 from logging import raiseExceptions
+from traceback import print_tb
 from PySide6.QtWidgets import (QApplication, QLabel, QVBoxLayout, QScrollArea,
                              QWidget, QMainWindow, QCheckBox, QHBoxLayout,
                              QSpinBox, QPushButton, QGraphicsOpacityEffect,
                              QFrame, QComboBox, QFormLayout, QSlider, QLineEdit,
                              QRadioButton, QDialog, QGroupBox, QToolButton, 
                              QDialogButtonBox, QMessageBox, QFileDialog, 
-                             QProgressDialog, )
+                             QProgressDialog)
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QDoubleValidator
-from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QThread, Signal
+from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QThread, Signal, Slot
 from extensions.ManhwaFilePlugin import ManhwaFilePlugin
 from extensions.AutoProviderPlugin import AutoProviderPlugin
 from extensions.extra_autoprovider_plugins import *
 from pathlib import Path
 import importlib.util
-#import threading
+import threading # Implement, needed if website is very slow
 import base64
+import ctypes # Implement, needed if website is very slow
 import json
 import time
 import sys
@@ -439,39 +441,124 @@ class ExportDialog(QDialog):
                             self.file, self.chapter]
         super().accept()
         
-class Loader(QThread):
-    progress = Signal(int)
-    loading_complete = Signal()
+class TaskRunner(QThread):
+    task_completed = Signal(bool, object)
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.complete = False
+    def __init__(self, func, *args, **kwargs):
+        super().__init__()
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+        self.is_running = True
+        self.worker_thread = None
+        self.result = None
+        self.success = False
 
-        self.progressDialog = QProgressDialog("Loading...", None, 0, 100, parent)
-        self.progressDialog.setCancelButton(None)
-        self.progress.connect(self.updateProgress)
-        self.loading_complete.connect(self.progressDialog.close)
+    class TaskCanceledException(Exception):
+        """Exception to be raised when the task is canceled"""
+        def __init__(self, message="A intended error occured"):
+            self.message = message
+            super().__init__(self.message)
 
     def run(self):
-        print("running")
-        self.progressDialog.show()
-        print("showed")
+        if not self.is_running:
+            return
 
-        for i in range(99):
-            print("doing stuff")
-            if self.complete:
-                self.progress.emit(100)
-                break
-            self.progress.emit(i)
-            QThread.sleep(1)  # Adjust the sleep time as necessary
+        try:
+            self.worker_thread = threading.Thread(target=self.worker_func)
+            self.worker_thread.start()
+            self.worker_thread.join()
+            self.task_completed.emit(self.success, self.result)
+            
+        except Exception as e:
+            self.task_completed.emit(False, None)
+            print(e)
 
-        self.loading_complete.emit()
+    def worker_func(self):
+        try:
+            self.result = self.func(*self.args, **self.kwargs)
+            self.success = True
+        except SystemExit:
+            self.success = False
+            self.result = None
+            print("Task was forcefully stopped.")
+        except Exception as e:
+            self.success = False
+            self.result = None
+            print(e)
 
-    def updateProgress(self, value):
-        self.progressDialog.setValue(value)
+    def stop(self):
+        print("Task is stopping.")
+        self.is_running = False
+        if not self.isFinished():
+            self.raise_exception()
+            self.wait()
 
-    def completeLoading(self):
-        self.complete = True
+    def get_thread_id(self):
+        if self.worker_thread:
+            return self.worker_thread.ident
+
+    def raise_exception(self):
+        thread_id = self.get_thread_id()
+        if thread_id:
+            res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(thread_id), ctypes.py_object(SystemExit))
+            if res > 1:
+                ctypes.pythonapi.PyThreadState_SetAsyncExc(thread_id, 0)
+                print("Exception raise failure")
+
+class CustomProgressDialog(QProgressDialog):
+
+    def __init__(self, windowTitle, windowIcon, windowLable="Doing a task...", buttonText="Cancel", func=lambda: None, *args, **kwargs):
+        super().__init__(windowLable, buttonText, 0, 100)
+        self.setWindowTitle(windowTitle)
+        self.setWindowIcon(QIcon(windowIcon))
+
+        self.taskRunner = TaskRunner(func, *args, **kwargs)
+        self.taskRunner.task_completed.connect(self.onTaskCompleted)
+        self.task_successful = False
+
+        self.setAutoClose(False)
+        self.setAutoReset(False)
+        self.setWindowModality(Qt.ApplicationModal)
+        self.canceled.connect(self.cancelTask)
+        self.show()
+
+        self.taskRunner.start()
+
+        while self.value() < 99 and not self.wasCanceled() and self.taskRunner.isRunning():
+            self.setValue(self.value() + 1)
+            time.sleep(0.1)
+            QApplication.processEvents()
+
+    @Slot(bool, object)
+    def onTaskCompleted(self, success, result):
+        self.taskRunner.quit()
+        self.taskRunner.wait()
+
+        if not self.wasCanceled():
+            if success:
+                self.task_successful = True
+                self.setValue(100)
+                print("Task completed successfully! Result:" + str(result))  # Adjust as needed
+                QTimer.singleShot(1000, self.accept)  # Close after 1 second if successful
+            else:
+                palette = QPalette(self.palette())
+                palette.setColor(QPalette.Highlight, QColor(Qt.red))
+                self.setPalette(palette)
+                self.setLabelText("Task failed!")
+                self.setCancelButtonText("Close")
+
+    def cancelTask(self):
+        self.taskRunner.stop()
+        self.taskRunner.wait()
+        self.setValue(0)
+        self.setLabelText("Task cancelled")
+        self.close()
+
+    def closeEvent(self, event):
+        if self.taskRunner.isRunning():
+            self.cancelTask()
+        event.accept()
 
 def absolute_path(relative_path):
     ab = os.path.dirname(__file__)
@@ -487,7 +574,7 @@ class ManhwaViewer(QMainWindow):
         
         self.setupUi()
         
-        self.setWindowTitle('Manhwa Viewer 1.5')
+        self.setWindowTitle('Manhwa Viewer 1.2')
         self.setWindowIcon(QIcon(f'{self.data_folder}logo2.png'))
         
         db_path = Path(f"{self.data_folder}data.db")
@@ -512,6 +599,7 @@ class ManhwaViewer(QMainWindow):
             self.logo_path = self.prov.get_logo_path()
             self.prov.set_blacklisted_websites(self.settings.get_blacklisted_websites())
         print(self.prov)
+        self.setWindowTitle(f'MV 1.2 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
         
         self.current_width = 0
         self.manual_width = self.settings.get_manual_width()
@@ -520,6 +608,8 @@ class ManhwaViewer(QMainWindow):
         self.prev_downscale_state = self.settings.get_downscaling()
         self.prev_upscale_state = self.settings.get_upscaling()
         self.image_paths = self.get_image_paths()
+        self.task_successful = False
+        self.threading = False
         
         # Image Labels
         self.image_labels = []
@@ -856,6 +946,7 @@ class ManhwaViewer(QMainWindow):
     def closeEvent(self, event):
         can_exit = True
         if can_exit:
+            print("Exiting ...")
             if self.settings.get_provider() == "auto":
                 self.settings.set_autoprovider(self.provider_dropdown.currentText())
             elif self.settings.get_provider() == "file":
@@ -875,6 +966,7 @@ class ManhwaViewer(QMainWindow):
             self.prov.redo_prep()
             event.accept() # let the window close
         else:
+            print("Couldn't exit.")
             event.ignore()
         
     def onRadioBtnToggled(self):
@@ -1116,18 +1208,18 @@ class ManhwaViewer(QMainWindow):
         print("Images reloaded")
         
     def next_chapter(self):
-        self.loader = Loader(self)
-        print("init loader")
-        self.loader.start()
-        print("started loader")
-        value = self.prov.next_chapter()
-        print("finished task")
-        self.loader.complete_loading()
-        print("finished loader")
+        self.threading = True
+        self.progressDialog = CustomProgressDialog(windowTitle="Loading ...", windowIcon=f"{self.data_folder}logo2.png", func=self.prov.next_chapter)
+        self.progressDialog.exec_()
 
-        if value:
+        self.task_successful = self.progressDialog.task_successful
+        self.threading = False
+
+        if self.task_successful:
+            self.setWindowTitle(f'MV 1.2 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
             self.settings.set_chapter(self.prov.get_chapter())
             if self.settings.get_auto_export() and self.settings.get_provider() == "auto": self.export_chapter()
+            self.task_successful = False
         else:
             self.prov.set_chapter(self.settings.get_chapter())
             self.prov.reload_chapter()
@@ -1141,10 +1233,18 @@ class ManhwaViewer(QMainWindow):
         self.reload_images()
         
     def previous_chapter(self):
-        value = self.prov.previous_chapter()
-        if value:
+        self.threading = True
+        self.progressDialog = CustomProgressDialog(windowTitle="Loading ...", windowIcon=f"{self.data_folder}logo2.png", func=self.prov.previous_chapter)
+        self.progressDialog.exec_()
+
+        self.task_successful = self.progressDialog.task_successful
+        self.threading = False
+
+        if self.task_successful:
+            self.setWindowTitle(f'MV 1.2 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
             self.settings.set_chapter(self.prov.get_chapter())
             if self.settings.get_auto_export() and self.settings.get_provider() == "auto": self.export_chapter()
+            self.task_successful = False
         else:
             self.prov.set_chapter(self.settings.get_chapter())
             self.prov.reload_chapter()
@@ -1158,10 +1258,18 @@ class ManhwaViewer(QMainWindow):
         self.reload_images()
         
     def reload_chapter(self):
-        value = self.prov.reload_chapter()
-        if value:
+        self.threading = True
+        self.progressDialog = CustomProgressDialog(windowTitle="Loading ...", windowIcon=f"{self.data_folder}logo2.png", func=self.prov.reload_chapter)
+        self.progressDialog.exec_()
+
+        self.task_successful = self.progressDialog.task_successful
+        self.threading = False
+
+        if self.task_successful:
+            self.setWindowTitle(f'MV 1.2 | {self.prov.get_title().title()}, Chapter {self.prov.get_chapter()}')
             self.settings.set_chapter(self.prov.get_chapter())
             if self.settings.get_auto_export() and self.settings.get_provider() == "auto": self.export_chapter() # Keep?
+            self.task_successful = False
         else:
             self.prov.set_chapter(self.settings.get_chapter())
             self.prov.reload_chapter()
@@ -1173,9 +1281,9 @@ class ManhwaViewer(QMainWindow):
         print("Reloading images...")
         self.scroll_area.verticalScrollBar().setValue(0) # Reset the scrollbar position to the top
         self.reload_images()
-                
+
     def timer_tick(self):
-        self.update_images()
+        if not self.threading: self.update_images()
         #print("Update tick") # Debug
 
 if __name__ == "__main__":

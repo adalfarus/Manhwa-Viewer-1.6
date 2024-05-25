@@ -4,13 +4,14 @@
 - fix overlaying of images on to side menu, when reloading (next chapter, etc.) # Fixed
 -> Repaint
 - popups for events (like failed to load [next] chapter) # Fixed
+- better handeling of chapter loading times # Fixed
+- title and chapter shown as name next to manhwaviewer # Fixed shown next to MV to make shorter and more readable
+- Make CustomProgressDialog look better and more customizable # Fixed
 
-- better handeling of chapter loading times
-- better exporting of chapters
-- better speed for loading chapters
--> preloading of the previous and the next chapter
-- adding support for text only and video (plugins)
 - add indirect and direct mode (indirect, what direct is at the moment, direct use the href from website
 to go to next chapter, etc. --> direct would require a start manga url [could potentially also extract it from chapter url])
-- title and chapter shown as name next to manhwaviewer
+- better speed for loading chapters
+-> preloading of the previous and the next chapter
+- better exporting of chapters
+- adding support for text only and video (plugins)
 - add support for anime and comic compilation videos

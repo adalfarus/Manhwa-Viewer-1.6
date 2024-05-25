@@ -113,7 +113,7 @@ class ManhwaFilePlugin:
     def _empty_cache(self):
         files = os.listdir(self.cache_folder)
         for f in files:
-            os.remove(f"{self.cache_folder}/{f}")
+            os.remove(f"{self.cache_folder}{f}")
         #list( map( os.unlink, (os.path.join( mydir,f) for f in os.listdir(mydir)) ) )
 
     def _make_cache_readable(self):
