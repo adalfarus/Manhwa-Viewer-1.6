@@ -7,7 +7,7 @@
   },
   {
    "optionDest": "filenames",
-   "value": "./NMV.py"
+   "value": "./nmv.py"
   },
   {
    "optionDest": "onefile",
@@ -67,7 +67,47 @@
   },
   {
    "optionDest": "datas",
-   "value": "./moduless;modules/"
+   "value": "./libs;libs/"
+  },
+  {
+   "optionDest": "datas",
+   "value": "./config.py;."
+  },
+  {
+   "optionDest": "datas",
+   "value": "./.venv/Lib/site-packages/stdlib_list;stdlib_list/"
+  },
+  {
+   "optionDest": "datas",
+   "value": "./moduless;moduless/"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "aplustools.data.imagetools"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "aplustools.web.search"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "requests.sessions"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "aiohttp"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "aiofiles"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "bs4"
+  },
+  {
+   "optionDest": "hiddenimports",
+   "value": "aplustools.package.timid"
   }
  ],
  "nonPyinstallerOptions": {
