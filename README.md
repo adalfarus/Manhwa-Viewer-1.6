@@ -207,7 +207,7 @@ To compatabilty:
 7. **Update Configuration:**
    - Change `os.environ['LOCALAPPDATA']` to `./data` (or any other folder you want the program data to sit in) in the `config.py` file and the startup section of the program.
    - Copy the directory `./default-config/modules` into `./`.
-   - (For older distributions, avoid any os.path.abspath usage in the base paths)
+   - (For older distributions, rename moduless -> modules, move all important folders into _internal, and avoid any os.path.abspath usage in the base paths)
 
 8. **Note on Missing Files:**
    - Depending on how you solved step 7, you will encounter an error about a missing file. The new version of `aplustools` should help detect other systems and handle these issues more easily. You can fix this by making the folder variables using os.path.abspath as we now don't have an absolute path anymore. The lower window corners are never rounded, which seems to be the system default so nothing I can do about that.  You can also disable the default os theme check in timer_tick as it won't be able to detect anything and just throw some error (they won't crash the program, but rather clutter the log file).
