@@ -2,6 +2,8 @@
 
 If you want to use ManhwaViewer v1.6.x, just download the latest release [here](https://github.com/adalfarus/Manhwa-Viewer-1.6/releases/latest).
 
+(New updates are on the way. I'm currently working on making the app, or to be more specific, gui a lot more efficient so that it can run on lower-power devices. This is taking some time though so except an update (V1.6.5) in maybe 2 weeks)
+
 <p float="center">
   <img src="/repo_images/repo_image_1.png" width="41%" />
   <img src="/repo_images/repo_image_4.png" width="48%" />
