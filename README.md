@@ -153,7 +153,7 @@ To compatabilty:
 - ~~Change the line **while self.current_value == 0 and self.value() < 10:** to **if self.current_value == 0 and self.value() < 10:**~~
 - The Classes dir was included with the executable, so it can't be fixed in compiled programs.
 
-### Linux Support (Ubuntu 22.04 LTS ONLY)
+### Linux Support (Ubuntu 22.04 LTS ONLY) -- There is a know incompatibility with Wayland & Arch
 
 #### Please note that this was tested only on a fresh install with all default packages installed. Your path to success may vary.
 
