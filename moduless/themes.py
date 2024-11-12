@@ -231,7 +231,7 @@ class Themes:
                     background: #f0f0f0;
                     border: none;
                 }
-            """, "Windows", "light")
+            """, None, "light")
     dark = Theme("""
             QWidget {
                 color: rgb(255, 255, 255);
