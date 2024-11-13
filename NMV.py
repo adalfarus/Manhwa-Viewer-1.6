@@ -3,11 +3,12 @@ import config  # Configures python environment before anything else is done
 
 from PySide6.QtWidgets import (QApplication, QLabel, QVBoxLayout, QWidget, QMainWindow, QCheckBox, QHBoxLayout,
                                QScroller, QSpinBox, QPushButton, QGraphicsOpacityEffect, QScrollerProperties, QFrame,
-                               QComboBox, QFormLayout, QLineEdit, QMessageBox, QScrollBar)
+                               QComboBox, QFormLayout, QLineEdit, QMessageBox, QScrollBar, QSizePolicy)
 from PySide6.QtGui import QDesktopServices, QPixmap, QIcon, QDoubleValidator, QFont, QImage
 from PySide6.QtCore import Qt, QTimer, QPropertyAnimation, QRect, QUrl
-from PySide6.QtMultimediaWidgets import QVideoWidget
-from PySide6.QtWebEngineWidgets import QWebEngineView
+# from PySide6.QtMultimediaWidgets import QVideoWidget
+# from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtGui import QColor
 
 from modules.AutoProviderPlugin import AutoProviderPlugin, AutoProviderBaseLike, AutoProviderBaseLike2
 from modules.Classes import (CustomProgressDialog, ImageLabel, SearchWidget, AdvancedQMessageBox,
@@ -55,7 +56,7 @@ class MainWindow(QMainWindow):
 
         self.system = System()
 
-        self.setWindowTitle("Manhwa Viewer 1.6.5")
+        self.setWindowTitle("Manhwa Viewer 166")
         self.setWindowIcon(QIcon(f"{self.data_folder}/Untitled-1-noBackground.png"))
 
         db_path = f"{self.data_folder}/data.db"
@@ -123,7 +124,8 @@ class MainWindow(QMainWindow):
 
     def check_for_update(self):
         try:
-            response = requests.get("https://raw.githubusercontent.com/adalfarus/update_check/main/mv/update.json")
+            response = requests.get("https://raw.githubusercontent.com/adalfarus/update_check/main/mv/update.json",
+                                    timeout=1)
         except Exception as e:
             title = "Info"
             text = "There was an error when checking for updates."
@@ -147,7 +149,7 @@ class MainWindow(QMainWindow):
             if release["versionNumber"] == newest_version:
                 newest_version_data = release
         push = newest_version_data["push"].title() == "True"
-        current_version = "1.6.5"
+        current_version = "166"
         found_version = None
 
         # Find a version bigger than the current version and prioritize versions with push
@@ -173,7 +175,7 @@ class MainWindow(QMainWindow):
             msg_box = AdvancedQMessageBox(self, QMessageBox.Icon.Question, title, text, description, checkbox,
                                           QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                           QMessageBox.StandardButton.Yes)
-
+            msg_box.raise_()
             retval = msg_box.exec()
 
             if checkbox.isChecked():
@@ -193,7 +195,7 @@ class MainWindow(QMainWindow):
             checkbox = QCheckBox("Do not show again")
             msg_box = AdvancedQMessageBox(self, QMessageBox.Icon.Information, title, text, description, checkbox,
                                           QMessageBox.StandardButton.Ok, QMessageBox.StandardButton.Ok)
-
+            msg_box.raise_()
             msg_box.exec()
 
             if checkbox.isChecked():
@@ -207,7 +209,7 @@ class MainWindow(QMainWindow):
             checkbox = QCheckBox("Do not show again")
             msg_box = AdvancedQMessageBox(self, QMessageBox.Icon.Information, title, text, description,
                                           checkbox, QMessageBox.StandardButton.Ok, QMessageBox.StandardButton.Ok)
-
+            msg_box.raise_()
             msg_box.exec()
 
             if checkbox.isChecked():
@@ -649,7 +651,7 @@ class MainWindow(QMainWindow):
 
     def reload_window_title(self):
         new_title = ' '.join(word[0].upper() + word[1:] if word else '' for word in self.provider.get_title().split())
-        self.setWindowTitle(f'MV 1.6.5 | {new_title}, Chapter {self.provider.get_chapter()}')
+        self.setWindowTitle(f'MV 166 | {new_title}, Chapter {self.provider.get_chapter()}')
 
     def get_content_paths(self, allowed_file_formats: tuple = None):
         if allowed_file_formats is None:
@@ -669,24 +671,48 @@ class MainWindow(QMainWindow):
         self.settings.set_hide_titlebar(self.hide_title_bar_checkbox.isChecked())
         self.show()
 
+    def deepen_color(self, color, darken_factor=100, saturation_factor=1.3):
+        # Increase saturation and darken the color
+        # Convert to HSL for control over lightness and saturation
+        color = color.toHsl()
+
+        deepened_color = color.darker(darken_factor)  # 100 is original, higher values are darker
+
+        # Optionally adjust saturation using HSV
+        deepened_color = deepened_color.toHsv()
+        deepened_color.setHsv(deepened_color.hue(),
+                              min(255, int(deepened_color.saturation() * saturation_factor)),
+                              deepened_color.value())
+
+        return deepened_color
+
     def reload_hover_effect_all_setting(self, callback: bool = False):
         style_sheet = """\nQPushButton:hover,\nQListWidget:hover,\nQSpinBox:hover,\nQLabel:hover,
         QComboBox:hover,\nQLineEdit:hover,\nQCheckBox:hover,\nQScrollBar:hover"""
         if self.hover_effect_all_checkbox.isChecked():
+            bg_color = self.deepen_color(self.menu_button.palette().color(self.menu_button.backgroundRole()), darken_factor=120)
+            if self.acrylic_menus_checkbox.isChecked():
+                bg_color.setAlpha(30)
+            defbg_color = self.menu_button.palette().color(self.menu_button.backgroundRole())
+            defbg_color.setAlpha(30)
             if self.theme == "light":
-                style_sheet += " {background-color: rgba(192, 192, 192, 30%);}"
+                style_sheet_non_transparent = style_sheet + f" {{background-color: {bg_color.name(QColor.HexArgb)};}}"
+                style_sheet += f" {{background-color: {defbg_color.name(QColor.HexArgb)};}}"
             else:
-                style_sheet += " {background-color: rgba(85, 85, 85, 30%);}"
-            self.menu_button.setStyleSheet(self.menu_button.styleSheet() + style_sheet)
+                style_sheet_non_transparent = style_sheet + f" {{background-color: {bg_color.name(QColor.HexArgb)};}}"
+                style_sheet += f" {{background-color: {defbg_color.name(QColor.HexArgb)};}}"
+            self.menu_button.setStyleSheet(self.menu_button.styleSheet() + style_sheet_non_transparent)
             self.side_menu.setStyleSheet(self.side_menu.styleSheet() + style_sheet)
-            self.search_bar_toggle_button.setStyleSheet(self.search_bar_toggle_button.styleSheet() + style_sheet)
-            self.search_widget.setStyleSheet(self.search_widget.styleSheet() + style_sheet)
-            self.buttons_widget.setStyleSheet(self.buttons_widget.styleSheet() + style_sheet)
+            self.search_bar_toggle_button.setStyleSheet(self.search_bar_toggle_button.styleSheet() + style_sheet_non_transparent)
+            # self.search_widget.setStyleSheet(self.search_widget.styleSheet() + style_sheet_non_transparent)
+            # self.search_widget.search_bar.setStyleSheet(self.search_widget.styleSheet() + style_sheet_non_transparent)
+            self.buttons_widget.setStyleSheet(self.buttons_widget.styleSheet() + style_sheet_non_transparent)
         else:
             self.menu_button.setStyleSheet("")
             self.side_menu.setStyleSheet("")
             self.search_bar_toggle_button.setStyleSheet("")
-            self.search_widget.setStyleSheet("")
+            # self.search_widget.setStyleSheet("")
+            # self.search_widget.search_bar.setStyleSheet("")
             self.buttons_widget.setStyleSheet("")
             # if self.theme == "light":
             #     style_sheet += " {background-color: rgba(85, 85, 85, 30%);}"
@@ -714,22 +740,27 @@ class MainWindow(QMainWindow):
     def reload_acrylic_menus_setting(self, callback: bool = False):
         if self.acrylic_menus_checkbox.isChecked():
             style_sheet = "\nQPushButton:hover,\nQComboBox:hover"
+            bg_color = self.menu_button.palette().color(self.menu_button.backgroundRole())
+            bg_color.setAlpha(30)
+            deep_bg_color = self.deepen_color(bg_color)
             if self.theme == "light":
-                style_sheet = ("* {background-color: rgba( 255, 255, 255, 30% );}"
-                               + style_sheet + " {background-color: rgba(192, 192, 192, 30%);}")
+                style_sheet = (f"* {{background-color: {bg_color.name(QColor.HexArgb)};}}"
+                               + style_sheet + f" {{background-color: {deep_bg_color.name(QColor.HexArgb)};}}")
             else:
-                style_sheet = ("* {background-color: rgba( 0, 0, 0, 30% );}"
-                               + style_sheet + " {background-color: rgba(85, 85, 85, 30%);}")
+                style_sheet = (f"* {{background-color: rgba( 0, 0, 0, 30% );}}"
+                               + style_sheet + f" {{background-color: {deep_bg_color.name(QColor.HexArgb)};}}")
             self.centralWidget().setStyleSheet(style_sheet)
             self.side_menu.setStyleSheet(style_sheet)
             self.search_bar_toggle_button.setStyleSheet(style_sheet)
             self.search_widget.setStyleSheet(style_sheet)
+            self.search_widget.search_bar.setStyleSheet(style_sheet)
             self.buttons_widget.setStyleSheet(style_sheet)
         else:
             self.centralWidget().setStyleSheet("")
             self.side_menu.setStyleSheet("")
             self.search_bar_toggle_button.setStyleSheet("")
             self.search_widget.setStyleSheet("")
+            self.search_widget.search_bar.setStyleSheet("")
             self.buttons_widget.setStyleSheet("")
         if not callback:
             self.reload_hover_effect_all_setting(callback=True)

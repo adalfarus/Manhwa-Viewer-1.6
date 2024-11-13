@@ -547,7 +547,11 @@ class CustomProgressDialog(QProgressDialog):
         self.setAutoReset(False)
         self.setWindowModality(Qt.ApplicationModal)
         self.canceled.connect(self.cancelTask)
-        self.show()
+
+        # Set the dialog to be fixed size
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.adjustSize()  # Adjust size based on layout and contents
+        self.setFixedSize(self.size())  # Lock the current size after adjusting
 
         self.last_value = 0
         self.current_value = 0
@@ -679,6 +683,7 @@ class SearchWidget(QWidget):
 
     def initUI(self):
         self.search_bar = QLineEdit(self)
+        self.search_bar.setObjectName("search_widget_line_edit")
         self.search_bar.setPlaceholderText("Search...")
         self.search_bar.textChanged.connect(self.on_text_changed)
         self.search_bar.returnPressed.connect(self.on_return_pressed)
