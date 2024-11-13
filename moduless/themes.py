@@ -442,6 +442,6 @@ class Themes:
                 background: #333333;
                 border: none;
             }
-        """, "Windows", "dark")
+        """, None, "dark")
     modern = Theme(None, "Fusion", "os")
     custom_my_theme = Theme(None, None, "os")
