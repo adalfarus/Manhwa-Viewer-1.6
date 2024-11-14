@@ -2,20 +2,26 @@
 
 If you want to use ManhwaViewer v1.6.x, just download the latest release [here](https://github.com/adalfarus/Manhwa-Viewer-1.6/releases/latest).
 
+### Version showcases:
+
+#### V1.6.2 vs 1.5
 <p float="center">
   <img src="/repo_images/repo_image_1.png" width="41%" />
   <img src="/repo_images/repo_image_4.png" width="48%" />
 </p>
 
-MV 1.6.5 Preview (Both windows are the same size)
+#### V1.6.5 & V166 Borderless vs V1.6.4.1 (Both windows are the same size)
 <p float="center">
     <img src="/repo_images/repo_image_8.png" width="100%" />
 </p>
+
+#### V1.6.5 & V166 Acrylic Menu Showcase (left) and V166 new themes showcase (right)
 <p float="center">
-    <img src="/repo_images/repo_image_9.png" width="100%" />
+    <img src="/repo_images/repo_image_9.png" width="49%" />
+    <img src="/repo_images/repo_image_10.png" width="49%" />
 </p>
 
-(Everything below this point is accurate for NMV 1.6.5)
+(Everything below this point is accurate for NMV 1.6.5 & NMV 166)
 ## For Users
 
 ### Basics:
