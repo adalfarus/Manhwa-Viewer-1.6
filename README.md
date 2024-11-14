@@ -31,6 +31,11 @@ If you want to use ManhwaViewer (NMV), just download the latest release [here](h
 - **NMV** (NewManhwaViewer) -> Quick rewrite that doesn't impact user experience while making ManhwaViewer compatible with new internal systems and removes many bugs. This will include all versions up to 2.0/200
 - **ADMV** (ActDirectManhwaViewer) -> A modern version using ActDirect, that uses best practices, is really compatible, efficient and configurable and makes important changes for further apps. This version will be released as ADMV 2.0/200
 
+### New Versioning:
+
+Traditionally ManhwaViewers releases used a v[Major].[Minor].[Patch] versioning scheme, it will continue to do so, but more compacted.
+For example "v1.6.5" can be reduced to "v165" without losing any information. The meaning of the numbers will not change.
+
 ### Basics:
 
 - **Search Bar**: At the top, which can be lowered. It will be grayed out if the current "Provider" does not support search.
