@@ -1,28 +1,35 @@
-# ManhwaViewer 1.6-dev
+# ManhwaViewer (NMV)
 
-If you want to use ManhwaViewer v1.6.x, just download the latest release [here](https://github.com/adalfarus/Manhwa-Viewer-1.6/releases/latest).
+If you want to use ManhwaViewer (NMV), just download the latest release [here](https://github.com/adalfarus/Manhwa-Viewer-1.6/releases/latest).
 
 ### Version showcases:
 
-#### V1.6.2 vs 1.5
+#### MV1.6.2 vs MV1.5
 <p float="center">
   <img src="/repo_images/repo_image_1.png" width="41%" />
   <img src="/repo_images/repo_image_4.png" width="48%" />
 </p>
 
-#### V1.6.5 & V166 Borderless vs V1.6.4.1 (Both windows are the same size)
+#### NMV1.6.5 & NMV166 Borderless vs MV1.6.4.1 (Both windows are the same size)
 <p float="center">
     <img src="/repo_images/repo_image_8.png" width="100%" />
 </p>
 
-#### V1.6.5 & V166 Acrylic Menu Showcase (left) and V166 new themes showcase (right)
+#### NMV1.6.5 & NMV166 Acrylic Menu Showcase (left) and NMV166 new themes showcase (right)
 <p float="center">
     <img src="/repo_images/repo_image_9.png" width="49%" />
     <img src="/repo_images/repo_image_10.png" width="49%" />
 </p>
 
 (Everything below this point is accurate for NMV 1.6.5 & NMV 166)
+
 ## For Users
+
+### MV, NMV and ADMV:
+
+- **MV** (ManhwaViewer) -> The original Versions from v1.0 to v1.6.4.1, including the content system rewrite in v1.5
+- **NMV** (NewManhwaViewer) -> Quick rewrite that doesn't impact user experience while making ManhwaViewer compatible with new internal systems and removes many bugs
+- **ADMV** (ActDirectManhwaViewer) -> A modern version using ActDirect, that uses best practices, is really compatible, efficient and configurable and makes important changes for further apps
 
 ### Basics:
 
